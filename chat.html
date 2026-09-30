@@ -740,6 +740,7 @@
       let listeningStartTime = null;
       let listeningTimer = null;
       let speechAvailable = false;
+      let currentSkill = 'interview';
 
       // Chat persistence and deduplication
       const CHAT_HISTORY_KEY = 'opencluely_chat_history_v1';
@@ -1008,20 +1009,18 @@
         addMessage('Stopped Listening', 'system');
       }
 
-      function handleTranscription(text) {
+      function handleTranscription(text, transcriptionOnly = false) {
         if (text && typeof text === 'string' && text.trim().length > 0) {
           // Hide listening animation first
           hideListeningAnimation();
 
-          // Show transcribed text with slight delay for smooth transition
-          setTimeout(() => {
-            addMessage(text.trim(), 'transcription');
-            
-            // Show thinking indicator after transcription
-            setTimeout(() => {
-              showThinkingIndicator();
-            }, 300);
-          }, 200);
+          // Render transcribed text immediately without delay
+          addMessage(text.trim(), 'transcription');
+          
+          // Only show thinking indicator if this is an AI response mode
+          if (!transcriptionOnly && currentSkill !== 'transcript') {
+            showThinkingIndicator();
+          }
         } else {
           console.warn('Invalid or empty transcription text - ignoring:', text);
         }
@@ -1149,13 +1148,71 @@
         blocks.forEach(b => addCodeSnippet(b.language, b.code));
       }
 
+      let streamBuffers = {};
+
+      function beginStreamingResponse(messageId) {
+        try { hideThinkingIndicator(); } catch (_) {}
+        if (!chatMessages) return;
+        if (chatMessages.querySelector(`[data-stream-id="${messageId}"]`)) {
+          return;
+        }
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'message assistant streaming';
+        messageDiv.setAttribute('data-stream-id', messageId);
+
+        const timeDiv = document.createElement('div');
+        timeDiv.className = 'message-time';
+        timeDiv.textContent = new Date().toLocaleTimeString();
+
+        const textDiv = document.createElement('div');
+        textDiv.className = 'message-text';
+        textDiv.textContent = '';
+
+        messageDiv.appendChild(timeDiv);
+        messageDiv.appendChild(textDiv);
+        chatMessages.appendChild(messageDiv);
+        streamBuffers[messageId] = '';
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+      }
+
+      function appendStreamingChunk(messageId, delta) {
+        if (!delta) return;
+        let messageDiv = chatMessages && chatMessages.querySelector(`[data-stream-id="${messageId}"]`);
+        if (!messageDiv) {
+          beginStreamingResponse(messageId);
+          messageDiv = chatMessages && chatMessages.querySelector(`[data-stream-id="${messageId}"]`);
+        }
+        streamBuffers[messageId] = (streamBuffers[messageId] || '') + delta;
+        if (messageDiv) {
+          const textDiv = messageDiv.querySelector('.message-text');
+          if (textDiv) {
+            textDiv.textContent = streamBuffers[messageId];
+          }
+          chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+      }
+
+      function finalizeStreamingResponse(messageId, response) {
+        if (messageId && chatMessages) {
+          const messageDiv = chatMessages.querySelector(`[data-stream-id="${messageId}"]`);
+          if (messageDiv) {
+            messageDiv.remove();
+          }
+        }
+        if (messageId && streamBuffers[messageId] !== undefined) {
+          delete streamBuffers[messageId];
+        }
+        try { hideThinkingIndicator(); } catch (_) {}
+        renderAssistantResponse(response);
+      }
+
       // Basic IPC Event Listeners - simplified
       
       // Listen for transcription events
       if (whysperAPI) {
         whysperAPI.onTranscriptionReceived((event, data) => {
           if (data && data.text) {
-            handleTranscription(data.text);
+            handleTranscription(data.text, data.transcriptionOnly);
           } else {
             console.warn('Invalid transcription data received:', data);
           }
@@ -1201,11 +1258,38 @@
           addMessage('Session memory has been cleared', 'system');
         });
 
+        if (whysperAPI.onSkillChanged) {
+          whysperAPI.onSkillChanged((event, data) => {
+            if (data && data.skill) {
+              currentSkill = data.skill;
+              if (currentSkill === 'transcript') {
+                try { hideThinkingIndicator(); } catch (_) {}
+              }
+            }
+          });
+        }
+
+        // Live streaming handlers for transcription LLM responses
+        if (whysperAPI.onTranscriptionLlmResponseStart) {
+          whysperAPI.onTranscriptionLlmResponseStart((event, data) => {
+            if (data && data.messageId) {
+              beginStreamingResponse(data.messageId);
+            }
+          });
+        }
+
+        if (whysperAPI.onTranscriptionLlmResponseChunk) {
+          whysperAPI.onTranscriptionLlmResponseChunk((event, data) => {
+            if (data && data.messageId) {
+              appendStreamingChunk(data.messageId, data.delta || '');
+            }
+          });
+        }
+
         // Replace transcription LLM handler to store text + snippets
         whysperAPI.onTranscriptionLlmResponse((event, data) => {
           if (data && data.response) {
-            try { hideThinkingIndicator(); } catch (_) {}
-            renderAssistantResponse(data.response);
+            finalizeStreamingResponse(data.messageId, data.response);
           }
         });
       }

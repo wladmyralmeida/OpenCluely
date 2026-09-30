@@ -103,10 +103,16 @@ class LLMService {
     return request;
   }
 
-  applySkillGenerationDefaults(request, activeSkill) {
+  applySkillGenerationDefaults(request, activeSkill, isTranscription = false) {
+    let maxOutputTokens;
+    if (activeSkill === 'interview') {
+      maxOutputTokens = 320;
+    } else if (isTranscription) {
+      maxOutputTokens = 450;
+    }
     return this.applyGenerationDefaults(
       request,
-      activeSkill === 'interview' ? { maxOutputTokens: 320 } : {}
+      maxOutputTokens ? { maxOutputTokens } : {}
     );
   }
 
@@ -730,7 +736,7 @@ class LLMService {
       contents: []
     };
 
-    this.applySkillGenerationDefaults(request, activeSkill);
+    this.applySkillGenerationDefaults(request, activeSkill, true);
 
     // Add intelligent filtering system instruction
     const intelligentPrompt = this.getIntelligentTranscriptionPrompt(activeSkill, programmingLanguage);
@@ -762,7 +768,7 @@ class LLMService {
       contents: []
     };
 
-    this.applySkillGenerationDefaults(request, activeSkill);
+    this.applySkillGenerationDefaults(request, activeSkill, true);
 
   // For chat/transcription messages, DO NOT include the full skill prompt; use only the intelligent filter prompt
   const intelligentPrompt = this.getIntelligentTranscriptionPrompt(activeSkill, programmingLanguage);
@@ -869,32 +875,17 @@ Always respond to the point, do not repeat the question or unnecessary informati
 - Or similar brief acknowledgments like: "I'm here, what's your ${activeSkill} question?"
 
 ### If the transcription IS relevant to ${activeSkill} or is a follow-up question:
-- Provide a comprehensive, detailed response
-- Use bullet points, examples, and explanations
-- Focus on actionable insights and complete answers
-- Do not truncate or shorten your response
-
-### Examples of casual/irrelevant messages:
-- "Hello", "Hi there", "How are you?"
-- "What's the weather like?"
-- "I'm just testing this"
-- Random conversations not related to ${activeSkill}
-
-### Examples of relevant messages:
-- Actual questions about ${activeSkill} concepts
-- Follow-up questions to previous responses
-- Requests for clarification on ${activeSkill} topics
-- Problem-solving requests related to ${activeSkill}
+- Provide a prompt, direct response with appropriate brevity.
+- Lead immediately with the key answer, insight, or solution.
+- Keep explanations clear and concise (2-4 sentences) so they can be parsed immediately during a live call.
+- If code is required, output only the clean, optimal snippet without unnecessary boilerplate or repetition.
 
 ## Response Format:
-- Keep responses detailed
-- Use bullet points for structured answers
-- Be encouraging and helpful
-- Stay focused on ${activeSkill}
+- Direct, concise, and focused on ${activeSkill}
+- Lead with the answer; avoid introductory filler or repeating the question
+- If the user's input is a coding or DSA problem statement, produce a clean, optimal solution in the selected programming language in a properly tagged code block without excessive conversational fluff.
 
-If the user's input is a coding or DSA problem statement and contains no code, produce a complete, runnable solution in the selected programming language without asking for more details. Always include the final implementation in a properly tagged code block.
-
-Remember: Be intelligent about filtering - only provide detailed responses when the user actually needs help with ${activeSkill}.`;
+Remember: Be intelligent about filtering - provide quick, direct responses so the user gets help immediately.`;
 
     return prompt;
   }

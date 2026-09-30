@@ -475,6 +475,40 @@
         let isInteractive = false;
         let scrollableElements = [];
         let initialized = false;
+        let _streamId = null;
+        let _streamText = '';
+
+        function beginStreaming(messageId) {
+            _streamId = messageId;
+            _streamText = '';
+            hideLoadingState();
+            const responseElement = document.getElementById('response-content');
+            const splitLayout = document.getElementById('split-layout');
+            const fullContent = document.getElementById('full-content');
+            const fullMarkdown = document.getElementById('full-markdown');
+            
+            if (responseElement) {
+                responseElement.classList.remove('hidden');
+                responseElement.dataset.hasResponse = 'true';
+            }
+            if (splitLayout) splitLayout.classList.add('hidden');
+            if (fullContent) fullContent.classList.remove('hidden');
+            if (fullMarkdown) fullMarkdown.textContent = '';
+        }
+
+        function appendStreaming(messageId, delta) {
+            if (!delta) return;
+            if (_streamId !== messageId) {
+                beginStreaming(messageId);
+            }
+            _streamText = (_streamText || '') + delta;
+            const fullMarkdown = document.getElementById('full-markdown');
+            if (fullMarkdown) {
+                fullMarkdown.textContent = _streamText;
+                const inner = document.querySelector('.full-content-inner');
+                if (inner) inner.scrollTop = inner.scrollHeight;
+            }
+        }
         
         // Immediate logging to verify script execution
         console.log('[LLM-RESPONSE] Script tag executed');
@@ -569,6 +603,22 @@
                     }
                 });
                 
+                // Listen for streaming transcription LLM events
+                if (window.electronAPI.onTranscriptionLlmResponseStart) {
+                    window.electronAPI.onTranscriptionLlmResponseStart((event, data) => {
+                        if (data && data.messageId) {
+                            beginStreaming(data.messageId);
+                        }
+                    });
+                }
+                if (window.electronAPI.onTranscriptionLlmResponseChunk) {
+                    window.electronAPI.onTranscriptionLlmResponseChunk((event, data) => {
+                        if (data && data.messageId) {
+                            appendStreaming(data.messageId, data.delta || '');
+                        }
+                    });
+                }
+
                 console.log('[LLM-RESPONSE] IPC listeners set up successfully');
             } else {
                 console.error('[LLM-RESPONSE] electronAPI not available!');
@@ -621,6 +671,8 @@
         }
 
         function displayResponse(data) {
+            _streamId = null;
+            _streamText = '';
             // Show content
             const responseElement = document.getElementById('response-content');
             

@@ -128,7 +128,7 @@ class ApplicationController {
     this._utteranceTimer = null;
     this._utteranceDispatchInFlight = false;
     this._speechModeGeneration = 0;
-    this._utteranceCoalesceMs = 300;
+    this._utteranceCoalesceMs = 150; // ms to wait for more fragments before LLM dispatch
 
     // First-run onboarding: detects missing .env / API key and triggers
     // a settings-window prompt on first launch so users don't have to
@@ -1294,6 +1294,12 @@ class ApplicationController {
     const transcriptionOnly = this.activeSkill === "transcript";
     if (transcriptionOnly) {
       this.sendToChatWindow("transcription-received", { text: fragment, transcriptionOnly: true });
+      if (this.shouldShowVoiceOverlay()) {
+        windowManager.showLLMResponse(fragment, {
+          skill: 'transcript',
+          isTranscriptionOnly: true
+        });
+      }
       return;
     }
     this.sendToVoiceResponseWindows("transcription-received", { text: fragment, transcriptionOnly: false });

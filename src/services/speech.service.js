@@ -420,12 +420,10 @@ class SpeechService extends EventEmitter {
     this.segmentBuffers = [];
     this.segmentBytes = 0;
     this.segmentTimer = null;
-    this.transcriptionInFlight = false;
-    this.pendingFlush = false;
-    this.pendingFinal = false;
     this.audioProgram = null;
     this.whisperCommand = null;
-    this.whisperWorker = new WhisperWorkerService();
+    // Worker pool: two Python subprocesses for parallel transcription.
+    this.whisperWorker = new WhisperWorkerService(2);
     this.isProcessingAudio = false;
     this.manualStopRequested = false;
     this._resetVadState();
@@ -753,6 +751,12 @@ class SpeechService extends EventEmitter {
     this.vadPreRoll = [];            // ring of recent pre-speech chunks
     this.vadPreRollMs = 0;           // duration held in the pre-roll ring
     this.vadLastChunkAt = 0;         // timestamp of the last ingested chunk
+    // Parallel transcription ordering state
+    this._transcribeSeq = 0;        // monotonic dispatch counter
+    this._nextEmitSeq = 0;          // next seq ready to surface to callers
+    this._resultQueue = [];         // out-of-order results holding area
+    this._inFlightCount = 0;        // number of concurrent transcriptions
+    this._finalPendingResolve = null; // resolves the stop-barrier promise
   }
 
   /**
@@ -1078,9 +1082,6 @@ class SpeechService extends EventEmitter {
 
     this.segmentBuffers = [];
     this.segmentBytes = 0;
-    this.transcriptionInFlight = false;
-    this.pendingFlush = false;
-    this.pendingFinal = false;
     this._resetVadState();
     this._audioDataLogged = false;
     this.useRendererCapture = false;
@@ -1308,11 +1309,11 @@ class SpeechService extends EventEmitter {
   }
 
   _getSilenceHangoverMs() {
-    return this._vadNumber('whisperSilenceHangoverMs', 'WHISPER_SILENCE_HANGOVER_MS', 'speech.whisper.silenceHangoverMs', 700, 200);
+    return this._vadNumber('whisperSilenceHangoverMs', 'WHISPER_SILENCE_HANGOVER_MS', 'speech.whisper.silenceHangoverMs', 400, 150);
   }
 
   _getMinUtteranceMs() {
-    return this._vadNumber('whisperMinUtteranceMs', 'WHISPER_MIN_UTTERANCE_MS', 'speech.whisper.minUtteranceMs', 350, 100);
+    return this._vadNumber('whisperMinUtteranceMs', 'WHISPER_MIN_UTTERANCE_MS', 'speech.whisper.minUtteranceMs', 250, 80);
   }
 
   _getMaxUtteranceMs() {
@@ -1815,47 +1816,90 @@ class SpeechService extends EventEmitter {
     }
   }
 
+  /**
+   * Dispatch the current audio buffer to the worker pool for transcription.
+   * Multiple flushes can be in-flight concurrently; results are held in an
+   * ordered queue and emitted in the original speech order so the chat window
+   * always sees fragments in sequence, regardless of which worker finishes
+   * first.
+   *
+   * When `final` is true the method waits (async) for every in-flight job to
+   * complete before returning — this gives _finalizeWhisperStop a clean barrier.
+   */
   async _flushWhisperSegment({ final }) {
-    if (this.transcriptionInFlight) {
-      // A flush was requested while a transcription is still running. Record
-      // that we owe a follow-up flush for ANY request (not just a final one),
-      // otherwise an utterance that ended mid-transcription stays stranded in
-      // the buffer until the next utterance ends or the session stops. Track
-      // final-ness separately so a queued stop still finalises correctly.
-      this.pendingFlush = true;
-      if (final) {
-        this.pendingFinal = true;
-      }
-      return;
+    if (this.segmentBytes) {
+      const audioBuffer = Buffer.concat(this.segmentBuffers, this.segmentBytes);
+      this.segmentBuffers = [];
+      this.segmentBytes = 0;
+
+      const seq = ++this._transcribeSeq;
+      this._inFlightCount++;
+
+      // Fire-and-forget: result surfaces through _drainResultQueue.
+      this._transcribeWhisperBuffer(audioBuffer)
+        .then((transcript) => {
+          const clean = (transcript || '').trim();
+          if (clean && !this._isHallucinatedTranscript(clean)) {
+            this._resultQueue.push({ seq, text: clean });
+            this._drainResultQueue();
+          } else {
+            if (clean) {
+              logger.debug('Dropped likely Whisper silence hallucination', { transcript: clean });
+            }
+            // Advance the emit cursor so later results aren't blocked.
+            if (seq === this._nextEmitSeq) {
+              this._nextEmitSeq++;
+              this._drainResultQueue();
+            }
+          }
+        })
+        .catch((err) => {
+          logger.error('Whisper segment transcription failed', { error: err.message });
+          // Advance cursor even on error to unblock the queue.
+          if (seq === this._nextEmitSeq) {
+            this._nextEmitSeq++;
+            this._drainResultQueue();
+          }
+        })
+        .finally(() => {
+          this._inFlightCount--;
+          this._checkFinalBarrier();
+        });
     }
 
-    if (!this.segmentBytes) {
-      return;
+    if (final) {
+      await this._awaitAllInFlight();
     }
+  }
 
-    const audioBuffer = Buffer.concat(this.segmentBuffers, this.segmentBytes);
-    this.segmentBuffers = [];
-    this.segmentBytes = 0;
+  /** Surface queued results in sequence order. */
+  _drainResultQueue() {
+    this._resultQueue.sort((a, b) => a.seq - b.seq);
+    while (
+      this._resultQueue.length > 0 &&
+      this._resultQueue[0].seq === this._nextEmitSeq
+    ) {
+      const { text } = this._resultQueue.shift();
+      this._nextEmitSeq++;
+      this.emit('transcription', text);
+    }
+  }
 
-    this.transcriptionInFlight = true;
+  /** Resolve when the in-flight count drops to zero (used by the stop barrier). */
+  _awaitAllInFlight() {
+    if (this._inFlightCount === 0) {
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => {
+      this._finalPendingResolve = resolve;
+    });
+  }
 
-    try {
-      const transcript = await this._transcribeWhisperBuffer(audioBuffer);
-      const clean = transcript ? transcript.trim() : '';
-      if (clean && !this._isHallucinatedTranscript(clean)) {
-        this.emit('transcription', clean);
-      } else if (clean) {
-        logger.debug('Dropped likely Whisper silence hallucination', { transcript: clean });
-      }
-    } finally {
-      this.transcriptionInFlight = false;
-
-      if (this.pendingFlush) {
-        this.pendingFlush = false;
-        const runFinal = this.pendingFinal;
-        this.pendingFinal = false;
-        await this._flushWhisperSegment({ final: runFinal });
-      }
+  _checkFinalBarrier() {
+    if (this._inFlightCount === 0 && this._finalPendingResolve) {
+      const resolve = this._finalPendingResolve;
+      this._finalPendingResolve = null;
+      resolve();
     }
   }
 
