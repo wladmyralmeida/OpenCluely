@@ -6,32 +6,84 @@ const path = require('path');
 const SYSTEM_AUDIO_SOURCE = 'system-audio-macos';
 
 class SystemAudioService extends EventEmitter {
-  constructor() { super(); this.process = null; this.pending = Buffer.alloc(0); this.samplePhase = 0; }
+  constructor() {
+    super();
+    this.process = null;
+    this.pending = Buffer.alloc(0);
+    this.samplePhase = 0;
+    this.isRunning = false;
+    this.reconnectTimer = null;
+    this.reconnectAttempts = 0;
+    this.maxReconnectAttempts = 3;
+  }
 
-  isSupported() { return process.platform === 'darwin'; }
+  isSupported() {
+    return process.platform === 'darwin';
+  }
 
   start() {
     if (this.process) return;
-    if (!this.isSupported()) throw new Error('Áudio do sistema está disponível apenas no macOS.');
+    if (!this.isSupported()) {
+      throw new Error('Áudio do sistema está disponível apenas no macOS.');
+    }
     const binary = this._binaryPath();
-    if (!fs.existsSync(binary)) throw new Error('O helper de áudio do sistema não foi encontrado. Reinstale o OpenCluely.');
-    this.process = spawn(binary, [], { stdio: ['ignore', 'pipe', 'pipe'] });
-    this.process.stdout.on('data', (data) => this._handleFloat32(data));
-    this.process.stderr.on('data', (data) => this.emit('status', data.toString().trim()));
-    this.process.once('error', (error) => this._fail(error));
-    this.process.once('exit', (code, signal) => {
-      const unexpected = this.process;
-      this.process = null;
-      if (unexpected && code && code !== 0) this._fail(new Error(`Captura de áudio do sistema terminou (${code}${signal ? `, ${signal}` : ''}).`));
-    });
+    if (!fs.existsSync(binary)) {
+      throw new Error('O helper de áudio do sistema não foi encontrado. Reinstale o OpenCluely.');
+    }
+
+    this.isRunning = true;
+    this._spawnProcess(binary);
+  }
+
+  _spawnProcess(binary) {
+    try {
+      this.process = spawn(binary, [], { stdio: ['ignore', 'pipe', 'pipe'] });
+
+      this.process.stdout.on('data', (data) => this._handleFloat32(data));
+      this.process.stderr.on('data', (data) => this.emit('status', data.toString().trim()));
+      this.process.once('error', (error) => this._fail(error));
+      
+      this.process.once('exit', (code, signal) => {
+        const wasRunning = this.isRunning;
+        this.process = null;
+
+        if (wasRunning && code && code !== 0) {
+          if (this.reconnectAttempts < this.maxReconnectAttempts) {
+            this.reconnectAttempts++;
+            const delay = 1000 * Math.pow(2, this.reconnectAttempts - 1);
+            this.emit('status', `Reconectando captura de áudio do sistema em ${delay / 1000}s (tentativa ${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
+            
+            if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = setTimeout(() => {
+              if (this.isRunning) {
+                this._spawnProcess(binary);
+              }
+            }, delay);
+          } else {
+            this._fail(new Error(`Captura de áudio do sistema terminou (${code}${signal ? `, ${signal}` : ''}).`));
+          }
+        }
+      });
+    } catch (err) {
+      this._fail(err);
+    }
   }
 
   stop() {
+    this.isRunning = false;
+    this.reconnectAttempts = 0;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+
     const child = this.process;
     this.process = null;
     this.pending = Buffer.alloc(0);
     this.samplePhase = 0;
-    if (child && !child.killed) child.kill('SIGTERM');
+    if (child && !child.killed) {
+      child.kill('SIGTERM');
+    }
   }
 
   _binaryPath() {
@@ -59,7 +111,9 @@ class SystemAudioService extends EventEmitter {
     if (written) this.emit('audio', output.subarray(0, written));
   }
 
-  _fail(error) { this.emit('error', error); }
+  _fail(error) {
+    this.emit('error', error);
+  }
 }
 
 module.exports = { SystemAudioService, SYSTEM_AUDIO_SOURCE };

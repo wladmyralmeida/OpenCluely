@@ -44,6 +44,16 @@ class PromptLoader {
   }
 
   /**
+   * Force reload all skill prompts from disk
+   */
+  reloadPrompts() {
+    this.promptsLoaded = false;
+    this.prompts.clear();
+    this.loadPrompts();
+    return this.prompts.size;
+  }
+
+  /**
    * Get the system prompt for a specific skill with optional programming language injection
    * @param {string} skillName - The name of the skill
    * @param {string|null} programmingLanguage - Optional programming language to inject

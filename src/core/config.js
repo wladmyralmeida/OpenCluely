@@ -76,10 +76,10 @@ class ConfigManager {
           // with natural utterance boundaries.
           vadEnabled: true,
           // Trailing silence (ms) that ends an utterance and triggers a flush.
-          silenceHangoverMs: 600,
+          silenceHangoverMs: 400,
           // Minimum accumulated speech (ms) before a pause counts as an
           // utterance — guards against coughs/clicks producing empty flushes.
-          minUtteranceMs: 350,
+          minUtteranceMs: 250,
           // Hard cap (ms): force-flush a long monologue even without a pause.
           maxUtteranceMs: 15000,
           // Pre-roll (ms) of audio kept before speech onset so the first
@@ -105,8 +105,9 @@ class ConfigManager {
     };
   }
 
-  get(keyPath) {
-    return keyPath.split('.').reduce((obj, key) => obj?.[key], this.config);
+  get(keyPath, defaultValue = undefined) {
+    const val = keyPath.split('.').reduce((obj, key) => obj?.[key], this.config);
+    return val !== undefined ? val : defaultValue;
   }
 
   set(keyPath, value) {
@@ -123,6 +124,41 @@ class ConfigManager {
 
   isFeatureEnabled(feature) {
     return this.get(`features.${feature}`) !== false;
+  }
+
+  /**
+   * Validate configuration schema and values
+   * @returns {{ valid: boolean, errors: string[] }}
+   */
+  validate() {
+    const errors = [];
+
+    // Validate LLM config
+    const maxRetries = this.get('llm.gemini.maxRetries');
+    if (typeof maxRetries !== 'number' || maxRetries < 1 || maxRetries > 10) {
+      errors.push(`Invalid llm.gemini.maxRetries: ${maxRetries} (expected 1-10)`);
+    }
+
+    const timeout = this.get('llm.gemini.timeout');
+    if (typeof timeout !== 'number' || timeout < 1000) {
+      errors.push(`Invalid llm.gemini.timeout: ${timeout} (expected >= 1000ms)`);
+    }
+
+    // Validate VAD config
+    const hangover = this.get('speech.whisper.silenceHangoverMs');
+    if (typeof hangover !== 'number' || hangover < 100 || hangover > 5000) {
+      errors.push(`Invalid speech.whisper.silenceHangoverMs: ${hangover} (expected 100-5000ms)`);
+    }
+
+    const minUtterance = this.get('speech.whisper.minUtteranceMs');
+    if (typeof minUtterance !== 'number' || minUtterance < 50 || minUtterance > 5000) {
+      errors.push(`Invalid speech.whisper.minUtteranceMs: ${minUtterance} (expected 50-5000ms)`);
+    }
+
+    return {
+      valid: errors.length === 0,
+      errors
+    };
   }
 }
 

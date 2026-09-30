@@ -5,8 +5,25 @@ const os = require('os');
 
 class Logger {
   constructor() {
-    this.logDir = path.join(os.homedir(), '.OpenCluely', 'logs');
+    this.logDir = this._resolveLogDir();
+    try {
+      const fs = require('fs');
+      if (!fs.existsSync(this.logDir)) {
+        fs.mkdirSync(this.logDir, { recursive: true });
+      }
+    } catch (_) {}
     this.setupLogger();
+  }
+
+  _resolveLogDir() {
+    try {
+      const electron = require('electron');
+      const app = electron.app || electron.remote?.app;
+      if (app && typeof app.getPath === 'function') {
+        return path.join(app.getPath('userData'), 'logs');
+      }
+    } catch (_) {}
+    return path.join(os.homedir(), '.OpenCluely', 'logs');
   }
 
   setupLogger() {

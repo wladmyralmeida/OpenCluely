@@ -700,6 +700,10 @@ class ApplicationController {
       return llmService.getStats();
     });
 
+    ipcMain.handle("get-system-diagnostics", async () => {
+      return this.getSystemDiagnostics();
+    });
+
     // Window binding IPC handlers
     ipcMain.handle("set-window-binding", (event, enabled) => {
       return windowManager.setWindowBinding(enabled);
@@ -1547,6 +1551,35 @@ class ApplicationController {
     } catch (error) {
       logger.error("Failed to update app name", { error: error.message });
     }
+  }
+
+  async getSystemDiagnostics() {
+    const speechStatus = speechService.getStatus ? speechService.getStatus() : {};
+    const sessionStats = sessionManager.getMemoryUsage ? sessionManager.getMemoryUsage() : {};
+    const configValidation = config.validate ? config.validate() : { valid: true, errors: [] };
+    
+    let llmStatus = { configured: !!process.env.GEMINI_API_KEY, model: config.get('llm.gemini.model') };
+    try {
+      if (llmService.client) {
+        llmStatus.initialized = true;
+      }
+    } catch (_) {}
+
+    return {
+      timestamp: new Date().toISOString(),
+      platform: process.platform,
+      version: app.getVersion ? app.getVersion() : '1.0.0',
+      activeSkill: this.activeSkill,
+      codingLanguage: this.codingLanguage,
+      speech: {
+        provider: speechService.provider,
+        isRecording: speechStatus.isRecording || false,
+        available: speechService.isAvailable ? speechService.isAvailable() : false
+      },
+      llm: llmStatus,
+      session: sessionStats,
+      configValidation
+    };
   }
 }
 
