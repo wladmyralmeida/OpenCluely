@@ -1287,13 +1287,7 @@ class WindowManager {
       timestamp: new Date().toISOString()
     });
     
-    logger.debug('Showing and focusing LLM window');
-    this.showOnCurrentDesktop(llmWindow);
-    
-    // Position bound windows when LLM response is shown
-    if (this.bindWindows) {
-      this.positionBoundWindows();
-    }
+    this.showLLMWindowIfHidden(llmWindow);
         
     logger.info('LLM response displayed', {
       contentLength: content.length,
@@ -1310,20 +1304,36 @@ class WindowManager {
     }
 
     const llmWindow = this.windows.get('llmResponse');
-    if (llmWindow) {
+    if (llmWindow && !llmWindow.isDestroyed()) {
       logger.debug('Showing LLM loading state');
       llmWindow.webContents.send('show-loading');
-      this.showOnCurrentDesktop(llmWindow);
-      
-      // Position bound windows when LLM loading is shown
-      if (this.bindWindows) {
-        this.positionBoundWindows();
-      }
+      this.showLLMWindowIfHidden(llmWindow);
       
       logger.debug('LLM loading window shown');
     } else {
       logger.error('LLM window not available for loading state');
     }
+  }
+
+  showLLMWindowIfHidden(llmWindow) {
+    if (llmWindow.isVisible()) return;
+
+    if (process.platform !== 'win32' && !llmWindow.isVisibleOnAllWorkspaces()) {
+      llmWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    }
+    if (process.platform === 'darwin') {
+      try {
+        llmWindow.setAlwaysOnTop(true, 'screen-saver', 2);
+      } catch {
+        llmWindow.setAlwaysOnTop(true, 'floating', 2);
+      }
+    } else {
+      llmWindow.setAlwaysOnTop(true);
+    }
+
+    if (this.bindWindows) this.positionBoundWindows();
+    if (process.platform === 'linux') llmWindow.show();
+    else llmWindow.showInactive();
   }
 
   hideLLMResponse() {
@@ -1353,6 +1363,7 @@ class WindowManager {
   hideSettings() {
     const settingsWindow = this.windows.get('settings');
     if (settingsWindow) {
+      settingsWindow.webContents.send('settings-window-hidden');
       settingsWindow.hide();
     }
   }
@@ -1404,13 +1415,14 @@ class WindowManager {
     const width = Math.round(Number(optimalSize.width)) || 840;
     const height = Math.round(Number(optimalSize.height)) || 480;
     
+    const [currentWidth, currentHeight] = llmWindow.getSize();
+    if (currentWidth === width && currentHeight === height) return;
+
     llmWindow.setSize(width, height);
     
-    // If windows are bound, position them together; otherwise center the LLM window
+    // Keep the user's chosen position when the windows are not bound.
     if (this.bindWindows) {
       this.positionBoundWindows();
-    } else {
-      this.centerWindow(llmWindow);
     }
     
     logger.debug('LLM window resized', { 

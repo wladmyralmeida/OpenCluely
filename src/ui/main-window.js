@@ -10,22 +10,27 @@ class MainWindowUI {
     constructor() {
         this.isInteractive = false;
         this.isHidden = false;
-        this.currentSkill = 'dsa'; // Default, will be updated from settings
+        this.currentSkill = 'interview'; // Updated from settings when available
         this.statusDot = null;
         this.skillIndicator = null;
+        this.skillMenu = null;
         this.micButton = null;
         this.isRecording = false;
         this.speechAvailable = false; // track availability
         this._popoverHideTimeout = null;
-        // Renderer-side audio capture state (used for Whisper on Windows)
+        // Renderer-side Whisper capture state (Windows and macOS).
         this._audioContext = null;
         this._mediaStream = null;
         this._scriptNode = null;
         this._captureInterval = null;
+        this._captureGeneration = 0;
+        this._callAudioInputId = null;
         
         // Define available skills for navigation
         this.availableSkills = [
-            'dsa'
+            'interview',
+            'dsa',
+            'transcript'
         ];
         
         this.init();
@@ -244,7 +249,7 @@ class MainWindowUI {
             const commandTab = document.querySelector('.command-tab');
             if (commandTab && window.electronAPI && window.electronAPI.resizeWindow) {
                 const rect = commandTab.getBoundingClientRect();
-                const width = Math.ceil(rect.width);
+                let width = Math.ceil(rect.width);
                 let height = Math.ceil(rect.height);
 
                 // If shortcuts popover is visible, extend height to fit it
@@ -252,6 +257,11 @@ class MainWindowUI {
                     const popRect = this.shortcutsPopover.getBoundingClientRect();
                     // popover is positioned below the bar (top:36px), add that plus its height and a small margin
                     height = Math.max(height, Math.ceil(36 + popRect.height + 8));
+                }
+                if (this.skillMenu && this.skillMenu.classList.contains('is-open')) {
+                    const menuRect = this.skillMenu.getBoundingClientRect();
+                    width = Math.max(width, Math.ceil(menuRect.width + 16));
+                    height = Math.max(height, Math.ceil(menuRect.bottom + 8));
                 }
                 
                 logger.debug('Resizing window to content', {
@@ -268,6 +278,7 @@ class MainWindowUI {
     setupElements() {
         this.statusDot = document.getElementById('statusDot');
         this.skillIndicator = document.getElementById('skillIndicator');
+        this.skillMenu = document.getElementById('skillMenu');
         this.settingsIndicator = document.getElementById('settingsIndicator'); // Optional
         this.micButton = document.getElementById('micButton');
     this.infoButton = document.getElementById('infoButton');
@@ -288,18 +299,36 @@ class MainWindowUI {
             }
         });
 
-        // Skill indicator click handler toggles DSA skill
-        this.skillIndicator.addEventListener('click', () => {
+        // The mode picker exposes all modes directly from the command bar.
+        this.skillIndicator.addEventListener('click', (event) => {
             if (!this.isInteractive) return;
-            const newSkill = 'dsa';
-            if (window.electronAPI && window.electronAPI.updateActiveSkill) {
-                window.electronAPI.updateActiveSkill(newSkill).then(() => {
-                    this.handleSkillActivated(newSkill);
-                });
-            } else {
-                this.handleSkillActivated(newSkill);
-            }
+            event.stopPropagation();
+            this.toggleSkillMenu();
         });
+        this.skillIndicator.addEventListener('keydown', (event) => {
+            if (!this.isInteractive || !['Enter', ' '].includes(event.key)) return;
+            event.preventDefault();
+            this.toggleSkillMenu();
+        });
+        if (this.skillMenu) {
+            this.skillMenu.querySelectorAll('[data-skill]').forEach(option => {
+                option.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    const skill = option.dataset.skill;
+                    const direction = this.availableSkills.indexOf(skill) - this.availableSkills.indexOf(this.currentSkill);
+                    if (direction !== 0) this.navigateSkill(direction);
+                    this.hideSkillMenu();
+                });
+            });
+            document.addEventListener('click', (event) => {
+                if (!this.skillMenu.contains(event.target) && !this.skillIndicator.contains(event.target)) {
+                    this.hideSkillMenu();
+                }
+            });
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape') this.hideSkillMenu();
+            });
+        }
 
         // Check for required elements (settingsIndicator is optional)
         if (this.settingsIndicator) {
@@ -433,6 +462,30 @@ class MainWindowUI {
                 this.handleRecordingStopped();
             });
 
+            window.electronAPI.receive('audio-input-settings-changed', (_event, settings) => {
+                if (this.isRecording && settings?.callAudioInputId !== this._callAudioInputId) {
+                    this._startRendererAudioCapture();
+                }
+            });
+
+            navigator.mediaDevices?.addEventListener?.('devicechange', async () => {
+                const selectedId = this._callAudioInputId;
+                const generation = this._captureGeneration;
+                if (!this.isRecording || !selectedId || selectedId === 'default') return;
+                try {
+                    const devices = await navigator.mediaDevices.enumerateDevices();
+                    if (generation !== this._captureGeneration) return;
+                    if (!devices.some(device => device.kind === 'audioinput' && device.deviceId === selectedId)) {
+                        this._stopRendererAudioCapture();
+                        window.electronAPI.reportAudioCaptureError(
+                            'A fonte de áudio da call foi desconectada. Selecione outra nas configurações.'
+                        );
+                    }
+                } catch (error) {
+                    logger.warn('Could not refresh audio devices', { error: error.message });
+                }
+            });
+
             window.electronAPI.onSkillChanged((event, data) => {
                 if (data && data.skill) {
                     this.handleSkillChanged(data);
@@ -519,7 +572,9 @@ class MainWindowUI {
     handleLLMResponse(data) {
         const skill = data.skill || data.metadata?.skill || 'General';
         const skillNames = {
+            'interview': 'Interview',
             'dsa': 'DSA',
+            'transcript': 'Transcrição',
             'behavioral': 'Behavioral', 
             'sales': 'Sales',
             'presentation': 'Presentation',
@@ -596,6 +651,7 @@ class MainWindowUI {
         if (!this.isInteractive && this.shortcutsPopover && this.shortcutsPopover.style.display !== 'none') {
             this.hideShortcutsPopover();
         }
+        if (!this.isInteractive) this.hideSkillMenu();
         
         // Update skill indicator tooltip
         this.updateSkillIndicator();
@@ -671,24 +727,45 @@ class MainWindowUI {
         logger.debug('Recording stopped', { component: 'MainWindowUI' });
     }
 
-    /**
-     * Capture microphone audio in the renderer using the Web Audio API.
-     * This is used for Whisper on Windows where node-record-lpcm16's sox/rec
-     * dependencies are unavailable.
-     */
+    /** Capture the selected Whisper input in the renderer via Web Audio. */
     async _startRendererAudioCapture() {
+        this._stopRendererAudioCapture();
+        const generation = this._captureGeneration;
+        let selectedInputId = 'default';
         try {
-            this._stopRendererAudioCapture();
+            const settings = await window.electronAPI.getSettings();
+            if (!this.isRecording || generation !== this._captureGeneration || settings.speechProvider !== 'whisper') {
+                return;
+            }
+            selectedInputId = settings.callAudioInputId || 'default';
+            this._callAudioInputId = selectedInputId;
 
-            const stream = await navigator.mediaDevices.getUserMedia({
-                audio: {
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGainControl: true,
-                    sampleRate: { ideal: 16000 }
-                }
-            });
+            // AEC/noise suppression/AGC are tuned for a close-talk mic capturing
+            // the local speaker. When the input device is a loopback route (e.g.
+            // BlackHole capturing a meeting's system audio), AEC treats that
+            // audio as an echo of local playback and aggressively suppresses it,
+            // and AGC/noise suppression tuned for one voice distort a mixed
+            // remote signal. Whisper also transcribes raw audio better than
+            // processed audio. Disable all three so loopback-captured speech
+            // survives intact.
+            const audio = {
+                echoCancellation: false,
+                noiseSuppression: false,
+                autoGainControl: false,
+                sampleRate: { ideal: 16000 }
+            };
+            if (selectedInputId !== 'default') audio.deviceId = { exact: selectedInputId };
+            const stream = await navigator.mediaDevices.getUserMedia({ audio });
+            if (!this.isRecording || generation !== this._captureGeneration) {
+                stream.getTracks().forEach(track => track.stop());
+                return;
+            }
             this._mediaStream = stream;
+            stream.getAudioTracks()[0]?.addEventListener('ended', () => {
+                if (generation !== this._captureGeneration) return;
+                this._stopRendererAudioCapture();
+                window.electronAPI.reportAudioCaptureError('A fonte de áudio da call foi desconectada. Selecione outra nas configurações.');
+            }, { once: true });
 
             const audioContext = new (window.AudioContext || window.webkitAudioContext)({
                 sampleRate: 16000
@@ -716,20 +793,29 @@ class MainWindowUI {
             source.connect(scriptNode);
             scriptNode.connect(audioContext.destination);
 
-            logger.info('Renderer audio capture started', { component: 'MainWindowUI' });
+            logger.info('Renderer audio capture started', {
+                component: 'MainWindowUI',
+                input: selectedInputId === 'default' ? 'default' : 'selected device'
+            });
         } catch (error) {
+            if (generation !== this._captureGeneration) return;
+            this._stopRendererAudioCapture();
             logger.error('Failed to start renderer audio capture', {
                 component: 'MainWindowUI',
                 error: error.message
             });
-            // Notify main process so it can stop the recording state
-            try {
-                await window.electronAPI.stopSpeechRecognition();
-            } catch (_) { /* ignore */ }
+            const message = error.name === 'NotAllowedError'
+                ? 'Permissão de microfone negada. Autorize o OpenCluely nos ajustes de privacidade do sistema.'
+                : selectedInputId === 'default'
+                    ? `Não foi possível captar o áudio: ${error.message}`
+                    : 'A fonte de áudio da call está indisponível. Selecione outra nas configurações.';
+            window.electronAPI.reportAudioCaptureError(message);
         }
     }
 
     _stopRendererAudioCapture() {
+        this._captureGeneration += 1;
+        this._callAudioInputId = null;
         try {
             if (this._scriptNode) {
                 this._scriptNode.disconnect();
@@ -758,7 +844,9 @@ class MainWindowUI {
 
     updateSkillIndicator() {
         const skillNames = {
+            'interview': 'Interview',
             'dsa': 'DSA',
+            'transcript': 'Transcrição',
             'behavioral': 'Behavioral', 
             'sales': 'Sales',
             'presentation': 'Presentation',
@@ -794,9 +882,10 @@ class MainWindowUI {
             skillSpan.textContent = skillName;
                         
             const tooltip = this.isInteractive ? 
-                `${skillName} - Use ⌘↑/↓ to navigate skills` : 
+                `${skillName} - Clique para escolher um modo` :
                 `${skillName} - Enable interactive mode (Alt+A) to navigate`;
             this.skillIndicator.title = tooltip;
+            this.updateSkillMenuSelection();
             
             // Add visual feedback for skill change
             this.animateSkillChange();
@@ -821,6 +910,33 @@ class MainWindowUI {
                 this.skillIndicator.style.transform = 'scale(1)';
             }, 200);
         }
+    }
+
+    updateSkillMenuSelection() {
+        if (!this.skillMenu) return;
+        this.skillMenu.querySelectorAll('[data-skill]').forEach(option => {
+            option.setAttribute('aria-checked', String(option.dataset.skill === this.currentSkill));
+        });
+    }
+
+    toggleSkillMenu() {
+        if (!this.skillMenu) return;
+        if (this.skillMenu.classList.contains('is-open')) {
+            this.hideSkillMenu();
+        } else {
+            this.hideShortcutsPopover();
+            this.skillMenu.classList.add('is-open');
+            this.skillIndicator.setAttribute('aria-expanded', 'true');
+            this.updateSkillMenuSelection();
+            this.resizeWindowToContent();
+        }
+    }
+
+    hideSkillMenu() {
+        if (!this.skillMenu || !this.skillMenu.classList.contains('is-open')) return;
+        this.skillMenu.classList.remove('is-open');
+        this.skillIndicator.setAttribute('aria-expanded', 'false');
+        this.resizeWindowToContent();
     }
 
     navigateSkill(direction) {
@@ -871,7 +987,9 @@ class MainWindowUI {
 
     showSkillChangeNotification(skill, direction) {
         const skillNames = {
+            'interview': 'Interview',
             'dsa': 'DSA',
+            'transcript': 'Transcrição',
             'behavioral': 'Behavioral', 
             'sales': 'Sales',
             'presentation': 'Presentation',
@@ -1241,6 +1359,7 @@ class MainWindowUI {
 
     showShortcutsPopover() {
         if (!this.shortcutsPopover) return;
+        this.hideSkillMenu();
         if (this._popoverHideTimeout) {
             clearTimeout(this._popoverHideTimeout);
             this._popoverHideTimeout = null;

@@ -16,6 +16,7 @@ class ChatWindowUI {
     constructor() {
         this.isRecording = false;
         this.isInteractive = true; // Start in interactive mode
+        this.transcriptionOnlyMode = false;
         this.elements = {};
         
         this.init();
@@ -76,7 +77,7 @@ class ChatWindowUI {
             // Speech recognition handlers
             window.electronAPI.onTranscriptionReceived((event, data) => {
                 if (data && data.text) {
-                    this.handleTranscription(data.text);
+                    this.handleTranscription(data.text, data.transcriptionOnly);
                 } else {
                     console.warn('Transcription event received but no text data:', data);
                 }
@@ -114,6 +115,10 @@ class ChatWindowUI {
             // Skill handlers
             window.electronAPI.onSkillChanged((event, data) => {
                 if (data && data.skill) {
+                    this.transcriptionOnlyMode = data.skill === 'transcript';
+                    this.hideThinkingIndicator();
+                    this.elements.chatMessages.querySelectorAll('[data-stream-id]').forEach(message => message.remove());
+                    this._streamBuffers = {};
                     this.handleSkillActivated(data.skill);
                 }
             });
@@ -264,10 +269,16 @@ class ChatWindowUI {
         logger.debug('Recording stopped in chat window');
     }
 
-    handleTranscription(text) {
+    handleTranscription(text, transcriptionOnly = false) {
         if (text && text.trim()) {
             // Hide listening animation first
             this.hideListeningAnimation();
+
+            if (transcriptionOnly) {
+                this.hideThinkingIndicator();
+                this.addMessage(text, 'transcription');
+                return;
+            }
             
             // Show transcribed text with a slight delay for smooth transition
             setTimeout(() => {
@@ -275,7 +286,7 @@ class ChatWindowUI {
                 
                 // Show thinking indicator after transcription
                 setTimeout(() => {
-                    this.showThinkingIndicator();
+                    if (!this.transcriptionOnlyMode) this.showThinkingIndicator();
                 }, 300);
             }, 200);
             
@@ -286,6 +297,10 @@ class ChatWindowUI {
     }
 
     async handleSkillActivated(skillName) {
+        if (skillName === 'transcript') {
+            this.addMessage('📝 Transcrição ativada: apenas o texto falado será exibido.', 'system');
+            return;
+        }
         try {
             // Request the actual skill prompt from the main process
             const skillPrompt = await window.electronAPI.getSkillPrompt(skillName);
@@ -298,7 +313,9 @@ class ChatWindowUI {
                 
                 // Show a brief activation message with the skill title
                 const icons = {
+                    'interview': '🎙️',
                     'dsa': '🧠',
+                    'transcript': '📝',
                     'behavioral': '💼', 
                     'sales': '💰',
                     'presentation': '🎤',

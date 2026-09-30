@@ -16,6 +16,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const whisperCaptureModeSelect = document.getElementById('whisperCaptureMode');
     const whisperResponseTargetSelect = document.getElementById('whisperResponseTarget');
     const whisperSegmentMsInput = document.getElementById('whisperSegmentMs');
+    const callAudioInputSelect = document.getElementById('callAudioInput');
+    const micAudioInputSelect = document.getElementById('micAudioInput');
+    const callAudioLevel = document.getElementById('callAudioLevel');
+    const micAudioLevel = document.getElementById('micAudioLevel');
+    const callAudioStatus = document.getElementById('callAudioStatus');
+    const micAudioStatus = document.getElementById('micAudioStatus');
     const geminiKeyInput = document.getElementById('geminiKey');
     const windowGapInput = document.getElementById('windowGap');
     const codingLanguageSelect = document.getElementById('codingLanguage');
@@ -28,13 +34,118 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
+    let settingsVisible = false;
+    let callAudioInputId = 'default';
+    let micAudioInputId = 'off';
+    let audioSettingsLoaded = false;
+    let availableAudioInputIds = new Set();
+    let needsLabelRefresh = false;
+    let labelRefreshAttempted = false;
+    let settingsRequestSeq = 0;
+    const callMonitor = new window.AudioInputMonitor(
+        (level) => updateAudioLevel(callAudioLevel, callAudioStatus, level),
+        (error) => { callAudioStatus.textContent = audioErrorLabel(error); }
+    );
+    const micMonitor = new window.AudioInputMonitor(
+        (level) => updateAudioLevel(micAudioLevel, micAudioStatus, level),
+        (error) => { micAudioStatus.textContent = audioErrorLabel(error); }
+    );
+
+    function audioErrorLabel(error) {
+        if (error.name === 'NotAllowedError') return 'Permissão negada';
+        if (error.name === 'NotFoundError' || error.name === 'OverconstrainedError') return 'Fonte indisponível';
+        return error.message || 'Erro na captura';
+    }
+
+    function updateAudioLevel(meter, status, level) {
+        const value = Math.min(100, Math.round(level * 500));
+        meter.value = value;
+        const label = value > 4 ? 'Sinal detectado' : 'Sem sinal';
+        if (status.textContent !== label) status.textContent = label;
+    }
+
+    function stopAudioMonitors() {
+        callMonitor.stop();
+        micMonitor.stop();
+    }
+
+    function populateAudioSelect(select, devices, selectedId, defaultLabel, defaultId) {
+        select.replaceChildren(new Option(defaultLabel, defaultId));
+        devices.forEach((device, index) => {
+            if (device.deviceId && device.deviceId !== 'default') {
+                select.add(new Option(device.label || `Entrada ${index + 1}`, device.deviceId));
+            }
+        });
+        if (selectedId !== defaultId && !availableAudioInputIds.has(selectedId)) {
+            select.add(new Option('Dispositivo indisponível', selectedId));
+        }
+        select.value = selectedId;
+    }
+
+    async function refreshAudioDevices() {
+        if (!navigator.mediaDevices?.enumerateDevices) {
+            callAudioStatus.textContent = 'Captura indisponível';
+            micAudioStatus.textContent = 'Captura indisponível';
+            return;
+        }
+        try {
+            const devices = (await navigator.mediaDevices.enumerateDevices())
+                .filter(device => device.kind === 'audioinput');
+            needsLabelRefresh = !labelRefreshAttempted && devices.some(device => !device.label);
+            availableAudioInputIds = new Set(devices.map(device => device.deviceId));
+            populateAudioSelect(callAudioInputSelect, devices, callAudioInputId,
+                'Entrada padrão do sistema', 'default');
+            populateAudioSelect(micAudioInputSelect, devices, micAudioInputId,
+                'Não monitorar', 'off');
+            updateAudioMonitors();
+        } catch (error) {
+            callAudioStatus.textContent = audioErrorLabel(error);
+            micAudioStatus.textContent = callAudioStatus.textContent;
+        }
+    }
+
+    function updateAudioMonitors() {
+        if (!settingsVisible || document.hidden || speechProviderSelect.value !== 'whisper') {
+            stopAudioMonitors();
+            return;
+        }
+        if (callAudioInputId !== 'default' && !availableAudioInputIds.has(callAudioInputId)) {
+            callMonitor.stop();
+            callAudioStatus.textContent = 'Fonte indisponível';
+        } else {
+            callAudioStatus.textContent = 'Conectando…';
+            const starting = callMonitor.start(callAudioInputId);
+            if (needsLabelRefresh) {
+                needsLabelRefresh = false;
+                labelRefreshAttempted = true;
+                starting.then(() => {
+                    if (settingsVisible && callMonitor.stream) refreshAudioDevices();
+                });
+            }
+        }
+        if (micAudioInputId === 'off') {
+            micMonitor.stop();
+            micAudioStatus.textContent = 'Desligado';
+        } else if (!availableAudioInputIds.has(micAudioInputId)) {
+            micMonitor.stop();
+            micAudioStatus.textContent = 'Fonte indisponível';
+        } else {
+            micAudioStatus.textContent = 'Conectando…';
+            micMonitor.start(micAudioInputId);
+        }
+    }
+
     // Request current settings when window opens
     const requestCurrentSettings = () => {
         if (window.electronAPI && window.electronAPI.getSettings) {
+            const requestSeq = ++settingsRequestSeq;
             window.electronAPI.getSettings().then(settings => {
+                if (requestSeq !== settingsRequestSeq) return;
                 loadSettingsIntoUI(settings);
             }).catch(error => {
+                if (requestSeq !== settingsRequestSeq) return;
                 console.error('Failed to get settings:', error);
+                refreshAudioDevices();
             });
         }
     };
@@ -42,6 +153,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Close button handler
     if (closeButton) {
         closeButton.addEventListener('click', () => {
+            settingsVisible = false;
+            stopAudioMonitors();
             window.api.send('close-settings');
         });
     }
@@ -49,6 +162,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Quit button handler with multiple attempts
     if (quitButton) {
         quitButton.addEventListener('click', () => {
+            settingsVisible = false;
+            stopAudioMonitors();
             try {
                 // Try multiple ways to quit the app
                 if (window.api && window.api.send) {
@@ -87,6 +202,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (whisperCaptureModeSelect) whisperCaptureModeSelect.value = settings.whisperCaptureMode || 'vad';
         if (whisperResponseTargetSelect) whisperResponseTargetSelect.value = settings.whisperResponseTarget || 'both';
         if (whisperSegmentMsInput) whisperSegmentMsInput.value = settings.whisperSegmentMs || '';
+        callAudioInputId = settings.callAudioInputId || 'default';
+        micAudioInputId = settings.micAudioInputId || 'off';
+        audioSettingsLoaded = true;
+        refreshAudioDevices();
         if (geminiKeyInput) geminiKeyInput.value = settings.geminiKey || '';
         if (windowGapInput) windowGapInput.value = settings.windowGap || '';
 
@@ -121,7 +240,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // Listen for settings window shown event
     if (window.electronAPI && window.electronAPI.receive) {
         window.electronAPI.receive('settings-window-shown', () => {
+            settingsVisible = true;
+            labelRefreshAttempted = false;
             requestCurrentSettings();
+        });
+        window.electronAPI.receive('settings-window-hidden', () => {
+            settingsVisible = false;
+            stopAudioMonitors();
         });
 
     // Listen for coding language changes from other windows via helper
@@ -130,6 +255,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 codingLanguageSelect.value = data.language;
                 console.log('Language updated from overlay window:', data.language);
             }
+    });
+    window.electronAPI.onSkillChanged((event, data) => {
+        if (data && data.skill && activeSkillSelect) {
+            activeSkillSelect.value = data.skill;
+        }
     });
     }
 
@@ -146,6 +276,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (whisperCaptureModeSelect) settings.whisperCaptureMode = whisperCaptureModeSelect.value;
         if (whisperResponseTargetSelect) settings.whisperResponseTarget = whisperResponseTargetSelect.value;
         if (whisperSegmentMsInput) settings.whisperSegmentMs = whisperSegmentMsInput.value;
+        if (audioSettingsLoaded) {
+            settings.callAudioInputId = callAudioInputId;
+            settings.micAudioInputId = micAudioInputId;
+        }
         if (geminiKeyInput) settings.geminiKey = geminiKeyInput.value;
         if (windowGapInput) settings.windowGap = windowGapInput.value;
         if (codingLanguageSelect) settings.codingLanguage = codingLanguageSelect.value;
@@ -179,9 +313,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (input) input.disabled = provider !== 'azure';
         });
         [whisperCommandInput, whisperModelInput, whisperLanguageInput, whisperDeviceSelect,
-            whisperCaptureModeSelect, whisperResponseTargetSelect, whisperSegmentMsInput].forEach(input => {
+            whisperCaptureModeSelect, whisperResponseTargetSelect, whisperSegmentMsInput,
+            callAudioInputSelect, micAudioInputSelect].forEach(input => {
             if (input) input.disabled = provider !== 'whisper';
         });
+        updateAudioMonitors();
     };
 
     // Add event listeners for all inputs
@@ -212,6 +348,28 @@ document.addEventListener('DOMContentLoaded', () => {
             saveSettings();
         });
     }
+
+    callAudioInputSelect.addEventListener('change', () => {
+        callAudioInputId = callAudioInputSelect.value;
+        updateAudioMonitors();
+        saveSettings();
+    });
+    micAudioInputSelect.addEventListener('change', () => {
+        micAudioInputId = micAudioInputSelect.value;
+        updateAudioMonitors();
+        saveSettings();
+    });
+    navigator.mediaDevices?.addEventListener?.('devicechange', refreshAudioDevices);
+    window.addEventListener('pointerdown', () => {
+        const callResume = callMonitor.audioContext?.resume?.();
+        const micResume = micMonitor.audioContext?.resume?.();
+        callResume?.catch(() => {});
+        micResume?.catch(() => {});
+    });
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) stopAudioMonitors();
+        else if (settingsVisible) refreshAudioDevices();
+    });
 
     // Language selection handler
     if (codingLanguageSelect) {

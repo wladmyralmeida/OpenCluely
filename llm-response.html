@@ -578,21 +578,27 @@
         function showLoadingState() {
             const loadingElement = document.getElementById('loading');
             const responseElement = document.getElementById('response-content');
+            const titleElement = document.querySelector('.window-title');
+            const hasResponse = responseElement?.dataset.hasResponse === 'true';
+
+            if (titleElement) {
+                titleElement.textContent = hasResponse ? 'AI Response · Analyzing…' : 'AI Response';
+            }
             
             if (loadingElement) {
-                loadingElement.classList.remove('hidden');
-                loadingElement.style.display = ''; // Remove any forced display styles
+                loadingElement.classList.toggle('hidden', hasResponse);
+                loadingElement.style.display = hasResponse ? 'none' : '';
             }
             
-            if (responseElement) {
+            if (responseElement && !hasResponse) {
                 responseElement.classList.add('hidden');
             }
-            
-            console.log('Loading state shown - should see Analyzing...');
         }
 
         function hideLoadingState() {
             const loadingElement = document.getElementById('loading');
+            const titleElement = document.querySelector('.window-title');
+            if (titleElement) titleElement.textContent = 'AI Response';
             if (loadingElement) {
                 loadingElement.classList.add('hidden');
                 loadingElement.style.display = 'none'; // Force hide
@@ -612,32 +618,6 @@
             }
 
             return escapeHtml(text).replace(/\n/g, '<br>');
-        }
-
-        function calculateContentMetrics(response, codeBlocks) {
-            // Count lines in the response
-            const lineCount = response.split('\n').length;
-            
-            // Check for long lines (over 80 characters)
-            const hasLongLines = response.split('\n').some(line => line.length > 80);
-            
-            // Count code blocks
-            const codeBlockCount = codeBlocks.length;
-            
-            // Estimate content complexity
-            const hasCode = codeBlockCount > 0;
-            const isLongContent = lineCount > 30;
-            const hasMultipleCodeBlocks = codeBlockCount > 2;
-            
-            return {
-                lineCount,
-                hasLongLines,
-                codeBlocks: codeBlockCount,
-                hasCode,
-                isLongContent,
-                hasMultipleCodeBlocks,
-                complexity: isLongContent || hasMultipleCodeBlocks ? 'high' : hasCode ? 'medium' : 'low'
-            };
         }
 
         function displayResponse(data) {
@@ -664,9 +644,6 @@
             const codeBlocks = extractCodeBlocks(response);
             hasCode = codeBlocks.length > 0;
 
-            // Calculate content metrics for dynamic sizing
-            const contentMetrics = calculateContentMetrics(response, codeBlocks);
-
             if (hasCode) {
                 // Split layout: text on left, code on right
                 displaySplitLayout(response, codeBlocks);
@@ -675,15 +652,7 @@
                 displayFullLayout(response);
             }
             
-            // Request dynamic window sizing based on content
-            setTimeout(() => {
-                window.electronAPI.resizeLlmWindowForContent(contentMetrics)
-                    .then(result => {
-                    })
-                    .catch(error => {
-                        console.error('Failed to resize window:', error);
-                    });
-            }, 200);
+            responseElement.dataset.hasResponse = 'true';
         }
 
         function setupScrolling() {

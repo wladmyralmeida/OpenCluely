@@ -175,6 +175,46 @@
         color: #ffffff;
       }
 
+      .skill-menu {
+        position: absolute;
+        top: 36px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 1001;
+        min-width: 190px;
+        padding: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 10px;
+        background: rgba(20, 20, 20, 0.95);
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+        -webkit-app-region: no-drag;
+        visibility: hidden;
+        pointer-events: none;
+      }
+
+      .skill-menu.is-open {
+        visibility: visible;
+        pointer-events: auto;
+      }
+
+      .skill-menu button {
+        display: block;
+        width: 100%;
+        padding: 9px 12px;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        color: white;
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .skill-menu button:hover,
+      .skill-menu button[aria-checked="true"] {
+        background: rgba(255, 255, 255, 0.15);
+      }
+
       #settingsIndicator {
         color: #ffffff;
         transition: all 0.3s ease;
@@ -362,9 +402,10 @@
         <i class="fas fa-microphone"></i>
       </div>
       <div class="command-separator"></div>
-      <div class="command-item" id="skillIndicator">
+      <div class="command-item" id="skillIndicator" role="button" tabindex="0" aria-haspopup="menu" aria-expanded="false" aria-controls="skillMenu">
         <i class="fas fa-brain"></i>
-        <span>DSA</span>
+        <span>Interview</span>
+        <i class="fas fa-chevron-down" aria-hidden="true"></i>
       </div>
       <div class="command-separator"></div>
       <div class="command-item" id="languageSelector">
@@ -375,6 +416,7 @@
           <option value="python">Python</option>
           <option value="java">Java</option>
           <option value="javascript">JavaScript</option>
+          <option value="dart">Dart</option>
         </select>
       </div>
       <div class="command-separator"></div>
@@ -384,6 +426,12 @@
       <div class="command-separator"></div>
       <div class="status-dot non-interactive" id="statusDot"></div>
     </div>
+
+  <div id="skillMenu" class="skill-menu" role="menu" aria-label="Modo">
+    <button type="button" role="menuitemradio" data-skill="interview" aria-checked="true">Interview</button>
+    <button type="button" role="menuitemradio" data-skill="dsa" aria-checked="false">DSA</button>
+    <button type="button" role="menuitemradio" data-skill="transcript" aria-checked="false">Transcrição</button>
+  </div>
 
   <!-- Shortcuts Popover (hidden by default via CSS) -->
   <div id="shortcutsPopover" class="shortcuts-popover">

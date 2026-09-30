@@ -270,6 +270,49 @@
         .settings-note code {
             color: rgba(255, 255, 255, 0.9);
         }
+
+        .audio-source {
+            display: flex;
+            flex-direction: column;
+            gap: 7px;
+            margin-bottom: 16px;
+        }
+
+        .audio-source .input-field {
+            max-width: none;
+        }
+
+        .audio-level-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .audio-level-row progress {
+            width: 100%;
+            height: 8px;
+            appearance: none;
+            border: 0;
+            border-radius: 8px;
+            overflow: hidden;
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        .audio-level-row progress::-webkit-progress-bar {
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        .audio-level-row progress::-webkit-progress-value {
+            background: #4caf50;
+            border-radius: 8px;
+        }
+
+        .audio-level-status {
+            width: 112px;
+            flex-shrink: 0;
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.7);
+        }
     </style>
 </head>
 <body>
@@ -309,6 +352,7 @@
                             <option value="python">Python</option>
                             <option value="java">Java</option>
                             <option value="javascript">JavaScript</option>
+                            <option value="dart">Dart</option>
                         </select>
                     </div>
                     <div class="settings-item">
@@ -317,7 +361,9 @@
                             <div class="settings-item-description">Choose your current focus area</div>
                         </div>
                         <select class="input-field" id="activeSkill">
+                            <option value="interview">Interview</option>
                             <option value="dsa">Data Structures & Algorithms</option>
+                            <option value="transcript">Transcrição (sem respostas da IA)</option>
                         </select>
                     </div>
                 </div>
@@ -383,6 +429,31 @@
 
                     <!-- Whisper fields (shown only when Whisper is selected) -->
                     <div id="whisperFields" class="settings-group">
+                        <div class="settings-stack" style="margin: 8px 0 20px;">
+                            <div class="audio-source">
+                                <label class="settings-item-label" for="callAudioInput">Áudio da call</label>
+                                <div class="settings-item-description">Fonte enviada ao Whisper para transcrição.</div>
+                                <select class="input-field" id="callAudioInput">
+                                    <option value="default">Entrada padrão do sistema</option>
+                                </select>
+                                <div class="audio-level-row">
+                                    <progress id="callAudioLevel" max="100" value="0" aria-label="Nível do áudio da call"></progress>
+                                    <span class="audio-level-status" id="callAudioStatus">Aguardando áudio</span>
+                                </div>
+                            </div>
+                            <div class="audio-source">
+                                <label class="settings-item-label" for="micAudioInput">Seu microfone</label>
+                                <div class="settings-item-description">Medidor independente; não entra na transcrição da call.</div>
+                                <select class="input-field" id="micAudioInput">
+                                    <option value="off">Não monitorar</option>
+                                </select>
+                                <div class="audio-level-row">
+                                    <progress id="micAudioLevel" max="100" value="0" aria-label="Nível do microfone"></progress>
+                                    <span class="audio-level-status" id="micAudioStatus">Desligado</span>
+                                </div>
+                            </div>
+                            <div class="settings-note">Para ouvir nos fones e captar a call pelo BlackHole, a saída do Teams precisa enviar áudio para ambos.</div>
+                        </div>
                         <div class="settings-item">
                             <div class="settings-stack">
                                 <div>
@@ -490,6 +561,7 @@
         </div>
     </div>
 
+    <script src="./src/ui/audio-input-monitor.js"></script>
     <script src="./src/ui/settings-window.js"></script>
 </body>
 </html>

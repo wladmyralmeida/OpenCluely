@@ -1,12 +1,12 @@
 const fs = require('fs');
 const path = require('path');
+const { getLanguageTitle, getLanguageFence } = require('./src/core/languages');
 
 class PromptLoader {
   constructor() {
     this.prompts = new Map();
     this.promptsLoaded = false;
     this.skillPromptSent = new Set();
-    // Focus only on DSA
     this.skillsRequiringProgrammingLanguage = ['dsa'];
   }
 
@@ -28,7 +28,6 @@ class PromptLoader {
       for (const file of files) {
         if (file.endsWith('.md')) {
           const skillName = path.basename(file, '.md');
-          if (skillName !== 'dsa') continue; // only keep DSA
           const filePath = path.join(promptsDir, file);
           const promptContent = fs.readFileSync(filePath, 'utf8');
           
@@ -78,12 +77,9 @@ class PromptLoader {
    * @returns {string} Modified prompt with programming language context
    */
   injectProgrammingLanguage(promptContent, programmingLanguage, skillName) {
-    const languageMap = { cpp: 'C++', c: 'C', python: 'Python', java: 'Java', javascript: 'JavaScript', js: 'JavaScript' };
-    const fenceTagMap = { cpp: 'cpp', c: 'c', python: 'python', java: 'java', javascript: 'javascript', js: 'javascript' };
-    const norm = (programmingLanguage || '').toLowerCase();
-    const languageTitle = languageMap[norm] || (programmingLanguage.charAt(0).toUpperCase() + programmingLanguage.slice(1));
-    const fenceTag = fenceTagMap[norm] || norm || 'text';
-    const languageUpper = (languageMap[norm] || languageTitle).toUpperCase();
+    const languageTitle = getLanguageTitle(programmingLanguage);
+    const fenceTag = getLanguageFence(programmingLanguage);
+    const languageUpper = languageTitle.toUpperCase();
     
     let languageInjection = '';
     

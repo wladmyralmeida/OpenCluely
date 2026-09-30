@@ -1,7 +1,10 @@
+const fs = require('fs');
+const path = require('path');
 const { GoogleGenAI } = require('@google/genai');
 const logger = require('../core/logger').createServiceLogger('LLM');
 const config = require('../core/config');
 const { promptLoader } = require('../../prompt-loader');
+const { getLanguageTitle, getLanguageFence } = require('../core/languages');
 
 class LLMService {
   constructor() {
@@ -10,8 +13,45 @@ class LLMService {
     this.isInitialized = false;
     this.requestCount = 0;
     this.errorCount = 0;
-    
+    this._interviewContext = null;
+
     this.initializeClient();
+  }
+
+  /**
+   * Optional local, gitignored files (candidate-profile.md, job-description.md
+   * at the repo root) that personalize interview-mode answers with the
+   * candidate's real background instead of generic textbook answers. Missing
+   * files are fine — interview mode just falls back to generic answers.
+   * Cached after first read since these don't change mid-session.
+   */
+  _loadInterviewContext() {
+    if (this._interviewContext !== null) {
+      return this._interviewContext;
+    }
+
+    const readIfExists = (fileName) => {
+      try {
+        const filePath = path.join(__dirname, '..', '..', fileName);
+        return fs.readFileSync(filePath, 'utf8').trim();
+      } catch (_) {
+        return '';
+      }
+    };
+
+    const profile = readIfExists('candidate-profile.md');
+    const jobDescription = readIfExists('job-description.md');
+
+    let context = '';
+    if (profile) {
+      context += `\n\n## Candidate background (use these real experiences when relevant instead of generic answers):\n\n${profile}`;
+    }
+    if (jobDescription) {
+      context += `\n\n## The role being interviewed for (tailor answers toward this when relevant):\n\n${jobDescription}`;
+    }
+
+    this._interviewContext = context;
+    return context;
   }
 
   initializeClient() {
@@ -61,6 +101,13 @@ class LLMService {
   applyGenerationDefaults(request, overrides = {}) {
     request.generationConfig = this.getGenerationConfig({ ...(request.generationConfig || {}), ...overrides });
     return request;
+  }
+
+  applySkillGenerationDefaults(request, activeSkill) {
+    return this.applyGenerationDefaults(
+      request,
+      activeSkill === 'interview' ? { maxOutputTokens: 320 } : {}
+    );
   }
 
   extractTextFromCandidates(response) {
@@ -153,7 +200,7 @@ class LLMService {
         ]
       };
 
-      this.applyGenerationDefaults(request);
+      this.applySkillGenerationDefaults(request, activeSkill);
 
       if (skillPrompt && skillPrompt.trim().length > 0) {
         request.systemInstruction = { parts: [{ text: skillPrompt }] };
@@ -253,7 +300,7 @@ class LLMService {
           }
         ]
       };
-      this.applyGenerationDefaults(geminiRequest);
+      this.applySkillGenerationDefaults(geminiRequest, activeSkill);
       if (skillPrompt && skillPrompt.trim().length > 0) {
         geminiRequest.systemInstruction = { parts: [{ text: skillPrompt }] };
       }
@@ -532,9 +579,7 @@ class LLMService {
   enforceProgrammingLanguage(text, programmingLanguage) {
     try {
       if (!text || !programmingLanguage) return text;
-      const norm = String(programmingLanguage).toLowerCase();
-      const fenceTagMap = { cpp: 'cpp', c: 'c', python: 'python', java: 'java', javascript: 'javascript', js: 'javascript' };
-      const fenceTag = fenceTagMap[norm] || norm || 'text';
+      const fenceTag = getLanguageFence(programmingLanguage);
 
       // Replace all triple-backtick fences' language token with the selected tag
       const replacedBackticks = text.replace(/```([^\n]*)\n/g, (match, info) => {
@@ -575,7 +620,7 @@ class LLMService {
       contents: []
     };
 
-    this.applyGenerationDefaults(request);
+    this.applySkillGenerationDefaults(request, activeSkill);
 
     // Use the skill prompt that already has programming language injected
     if (requestComponents.shouldUseModelMemory && requestComponents.skillPrompt) {
@@ -604,7 +649,7 @@ class LLMService {
       contents: []
     };
 
-    this.applyGenerationDefaults(request);
+    this.applySkillGenerationDefaults(request, activeSkill);
 
     // Use the skill prompt from context (which may already include programming language)
     if (skillContext.skillPrompt) {
@@ -685,7 +730,7 @@ class LLMService {
       contents: []
     };
 
-    this.applyGenerationDefaults(request);
+    this.applySkillGenerationDefaults(request, activeSkill);
 
     // Add intelligent filtering system instruction
     const intelligentPrompt = this.getIntelligentTranscriptionPrompt(activeSkill, programmingLanguage);
@@ -717,7 +762,7 @@ class LLMService {
       contents: []
     };
 
-    this.applyGenerationDefaults(request);
+    this.applySkillGenerationDefaults(request, activeSkill);
 
   // For chat/transcription messages, DO NOT include the full skill prompt; use only the intelligent filter prompt
   const intelligentPrompt = this.getIntelligentTranscriptionPrompt(activeSkill, programmingLanguage);
@@ -779,6 +824,29 @@ class LLMService {
   }
 
   getIntelligentTranscriptionPrompt(activeSkill, programmingLanguage) {
+    if (activeSkill === 'interview') {
+      return `# Live Interview Answer System
+
+You are helping a candidate answer questions a recruiter/interviewer is asking out loud, right now, in a live call. The candidate reads or paraphrases your answer immediately, so it must be directly usable in speech.
+
+## Response Rules:
+- ALWAYS answer the question directly. Never ask the user to clarify or "provide a problem" — if ambiguous, answer the most likely interpretation.
+- Write in first person, as the candidate would speak ("I'd approach this by...", "In my experience...").
+- Default to plain prose. Only use a code block if the question explicitly asks to write or see code.
+- Keep answers easy to scan during a call: usually 2-3 short sentences (about 30-60 words). For a behavioral question, use at most 4 short sentences. Add detail only when the question has multiple parts or explicitly asks for it.
+- Lead with the answer. Skip introductions, repeated questions, filler, and closing summaries.
+- No headers, no bullet-point essays, no meta-commentary about being an AI.
+- If the transcription is just casual chatter with no real question (e.g. "hello", "can you hear me"), give a brief natural acknowledgment instead of a long answer.
+- For behavioral/experience questions, draw on the candidate's real background below instead of inventing a generic anecdote. Pick the most relevant real project/role and speak specifically (company, stack, outcome) rather than vaguely.
+
+## Answer shape:
+- Conceptual/technical question (e.g. complexity, how something works, trade-offs): direct answer in the first sentence, then 1-3 sentences of reasoning or a tiny example.
+- Behavioral/experience question: short, concrete, situation-action-result answer grounded in the candidate's real history below.
+- Small talk or yes/no: one or two natural sentences.
+
+Tone: confident, concise, conversational — a well-prepared candidate thinking out loud, not a textbook.${this._loadInterviewContext()}`;
+    }
+
     let prompt = `# Intelligent Transcription Response System
 
 Assume you are asked a question in ${activeSkill.toUpperCase()} mode. Your job is to intelligently respond to question/message with appropriate brevity.
@@ -787,11 +855,8 @@ Always respond to the point, do not repeat the question or unnecessary informati
 
     // Add programming language context if provided
     if (programmingLanguage) {
-      const lang = String(programmingLanguage).toLowerCase();
-      const languageMap = { cpp: 'C++', c: 'C', python: 'Python', java: 'Java', javascript: 'JavaScript', js: 'JavaScript' };
-      const fenceTagMap = { cpp: 'cpp', c: 'c', python: 'python', java: 'java', javascript: 'javascript', js: 'javascript' };
-      const languageTitle = languageMap[lang] || (lang.charAt(0).toUpperCase() + lang.slice(1));
-      const fenceTag = fenceTagMap[lang] || lang || 'text';
+      const languageTitle = getLanguageTitle(programmingLanguage);
+      const fenceTag = getLanguageFence(programmingLanguage);
       prompt += `\n\nCODING CONTEXT: Respond ONLY in ${languageTitle}. All code blocks must use triple backticks with language tag \`\`\`${fenceTag}\`\`\`. Do not include other languages unless explicitly asked.`;
     }
 
@@ -930,12 +995,17 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
             model: modelName
           });
 
-          // For model-unavailable / overloaded / rate-limit errors, move to
-          // the next fallback model immediately instead of burning all retries.
+          // For model-unavailable / overloaded / rate-limit / retired-model
+          // errors, move to the next fallback model immediately instead of
+          // burning all retries — a 404 "no longer available" will never
+          // succeed no matter how many times we retry the same model.
           const isModelUnavailable = errorInfo.type === 'RATE_LIMIT_ERROR' ||
             error.message.includes('503') ||
             error.message.includes('UNAVAILABLE') ||
-            error.message.includes('high demand');
+            error.message.includes('high demand') ||
+            error.message.includes('404') ||
+            error.message.includes('NOT_FOUND') ||
+            error.message.includes('no longer available');
 
           if (isModelUnavailable && modelName !== modelsToTry[modelsToTry.length - 1]) {
             logger.info(`Switching to fallback model after ${modelName} unavailable`, {
@@ -1092,7 +1162,10 @@ Remember: Be intelligent about filtering - only provide detailed responses when 
           const isModelUnavailable = errorInfo.type === 'RATE_LIMIT_ERROR' ||
             error.message.includes('503') ||
             error.message.includes('UNAVAILABLE') ||
-            error.message.includes('high demand');
+            error.message.includes('high demand') ||
+            error.message.includes('404') ||
+            error.message.includes('NOT_FOUND') ||
+            error.message.includes('no longer available');
 
           if (isModelUnavailable && modelName !== modelsToTry[modelsToTry.length - 1]) {
             break; // try next fallback model
