@@ -1,3 +1,5 @@
+const path = require('path');
+const fs = require('fs');
 const logger = require('../core/logger').createServiceLogger('SESSION');
 const config = require('../core/config');
 const { promptLoader } = require('../../prompt-loader');
@@ -10,8 +12,87 @@ class SessionManager {
     this.compressionThreshold = config.get('session.compressionThreshold');
     this.currentSkill = 'interview';
     this.isInitialized = false;
+    this._saveTimer = null;
     
-    this.initializeWithSkillPrompts();
+    // Attempt to load previous session from disk
+    const loaded = this._loadFromDisk();
+    if (!loaded) {
+      this.initializeWithSkillPrompts();
+    }
+  }
+
+  /**
+   * Get the storage path for session memory persistence
+   */
+  _getStoragePath() {
+    try {
+      const electron = require('electron');
+      const app = electron.app || electron.remote?.app;
+      if (app && typeof app.getPath === 'function') {
+        return path.join(app.getPath('userData'), 'session-memory.json');
+      }
+    } catch (_) {
+      // Non-electron context (testing or scripts)
+    }
+    return path.join(process.cwd(), '.session-memory.json');
+  }
+
+  /**
+   * Load persisted session memory from disk
+   */
+  _loadFromDisk() {
+    try {
+      const filePath = this._getStoragePath();
+      if (!fs.existsSync(filePath)) return false;
+
+      const raw = fs.readFileSync(filePath, 'utf8');
+      if (!raw || !raw.trim()) return false;
+
+      const data = JSON.parse(raw);
+      if (Array.isArray(data) && data.length > 0) {
+        this.sessionMemory = data;
+        this.isInitialized = true;
+        logger.info('Session memory loaded from disk', {
+          eventCount: this.sessionMemory.length,
+          path: filePath
+        });
+        return true;
+      }
+    } catch (error) {
+      logger.warn('Failed to load session memory from disk', { error: error.message });
+    }
+    return false;
+  }
+
+  /**
+   * Debounced save of session memory to disk
+   */
+  _saveToDiskDebounced() {
+    if (this._saveTimer) {
+      clearTimeout(this._saveTimer);
+    }
+    this._saveTimer = setTimeout(() => {
+      this._saveToDisk();
+    }, 1000);
+  }
+
+  /**
+   * Write session memory to disk atomically
+   */
+  _saveToDisk() {
+    try {
+      const filePath = this._getStoragePath();
+      const dir = path.dirname(filePath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      const tmpPath = `${filePath}.tmp`;
+      fs.writeFileSync(tmpPath, JSON.stringify(this.sessionMemory, null, 2), 'utf8');
+      fs.renameSync(tmpPath, filePath);
+      logger.debug('Session memory persisted to disk', { eventCount: this.sessionMemory.length });
+    } catch (error) {
+      logger.warn('Failed to persist session memory to disk', { error: error.message });
+    }
   }
 
   /**
@@ -102,6 +183,7 @@ class SessionManager {
     });
 
     this.performMaintenanceIfNeeded();
+    this._saveToDiskDebounced();
     return event.id;
   }
 
@@ -577,11 +659,24 @@ class SessionManager {
   }
 
   clear() {
+    if (this._saveTimer) {
+      clearTimeout(this._saveTimer);
+      this._saveTimer = null;
+    }
     const eventCount = this.sessionMemory.length;
     this.sessionMemory = [];
     this.isInitialized = false;
     
-    logger.info('Session memory cleared', { eventCount });
+    try {
+      const filePath = this._getStoragePath();
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    } catch (err) {
+      logger.warn('Failed to delete session memory file during clear', { error: err.message });
+    }
+
+    logger.info('Session memory cleared and removed from disk', { eventCount });
     
     // Reinitialize with skill prompts
     this.initializeWithSkillPrompts();

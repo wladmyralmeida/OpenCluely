@@ -111,24 +111,37 @@ const windowManager = require("./src/managers/window.manager");
 const sessionManager = require("./src/managers/session.manager");
 const availableSkills = ["interview", "dsa", "transcript"];
 
+// Controllers
+const ShortcutController = require("./src/controllers/shortcut.controller");
+const TranscriptionController = require("./src/controllers/transcription.controller");
+
 class ApplicationController {
   constructor() {
     this.isReady = false;
     this.starting = false;
     this.activeSkill = "interview";
-  // Default to C++ so language is enforced from first run
-  this.codingLanguage = "cpp";
+    // Default to C++ so language is enforced from first run
+    this.codingLanguage = "cpp";
     this.speechAvailable = false;
-
-    // Utterance coalescing: VAD emits a transcript per natural pause, but a
-    // single spoken question can still arrive as a few fragments (mid-thought
-    // pauses). We buffer fragments and debounce so one question yields one LLM
-    // call instead of several slow, half-answered ones.
-    this._utteranceBuffer = "";
-    this._utteranceTimer = null;
-    this._utteranceDispatchInFlight = false;
     this._speechModeGeneration = 0;
-    this._utteranceCoalesceMs = 150; // ms to wait for more fragments before LLM dispatch
+
+    // Controllers
+    this.shortcutController = new ShortcutController({
+      appController: this,
+      windowManager,
+      speechService,
+      sessionManager,
+      availableSkills
+    });
+
+    this.transcriptionController = new TranscriptionController({
+      appController: this,
+      windowManager,
+      speechService,
+      sessionManager,
+      llmService,
+      captureService
+    });
 
     // First-run onboarding: detects missing .env / API key and triggers
     // a settings-window prompt on first launch so users don't have to
@@ -412,31 +425,7 @@ class ApplicationController {
   }
 
   setupGlobalShortcuts() {
-    const shortcuts = {
-      "CommandOrControl+Shift+S": () => this.triggerScreenshotOCR(),
-      "CommandOrControl+Shift+V": () => windowManager.toggleVisibility(),
-      "CommandOrControl+Shift+I": () => windowManager.toggleInteraction(),
-      "CommandOrControl+Shift+C": () => windowManager.switchToWindow("chat"),
-      "CommandOrControl+Shift+\\": () => this.clearSessionMemory(),
-      "CommandOrControl+,": () => windowManager.showSettings(),
-      "Alt+A": () => windowManager.toggleInteraction(),
-      "Alt+R": () => this.toggleSpeechRecognition(),
-      "CommandOrControl+Shift+T": () => windowManager.forceAlwaysOnTopForAllWindows(),
-      "CommandOrControl+Shift+Alt+T": () => {
-        const results = windowManager.testAlwaysOnTopForAllWindows();
-        logger.info('Always-on-top test triggered via shortcut', results);
-      },
-      // Context-sensitive shortcuts based on interaction mode
-      "CommandOrControl+Up": () => this.handleUpArrow(),
-      "CommandOrControl+Down": () => this.handleDownArrow(),
-      "CommandOrControl+Left": () => this.handleLeftArrow(),
-      "CommandOrControl+Right": () => this.handleRightArrow(),
-    };
-
-    Object.entries(shortcuts).forEach(([accelerator, handler]) => {
-      const success = globalShortcut.register(accelerator, handler);
-      logger.debug("Global shortcut registered", { accelerator, success });
-    });
+    this.shortcutController.setupGlobalShortcuts();
   }
 
   setupServiceEventHandlers() {
@@ -989,115 +978,31 @@ class ApplicationController {
   }
 
   toggleSpeechRecognition() {
-    const isAvailable = typeof speechService.isAvailable === 'function' ? speechService.isAvailable() : !!speechService.getStatus?.().isInitialized;
-    if (!isAvailable) {
-      logger.warn("Speech recognition unavailable; toggle ignored");
-      try {
-        windowManager.broadcastToAllWindows("speech-status", { status: 'Speech recognition unavailable', available: false });
-        windowManager.broadcastToAllWindows("speech-availability", { available: false });
-      } catch (e) {}
-      return;
-    }
-    const currentStatus = speechService.getStatus();
-    if (currentStatus.isRecording) {
-      try {
-        speechService.stopRecording();
-        logger.info("Speech recognition stopped via global shortcut");
-      } catch (error) {
-        logger.error("Error stopping speech recognition:", error);
-      }
-    } else {
-      try {
-        speechService.startRecording();
-        windowManager.showChatWindow();
-        logger.info("Speech recognition started via global shortcut");
-      } catch (error) {
-        logger.error("Error starting speech recognition:", error);
-      }
-    }
+    return this.shortcutController.toggleSpeechRecognition();
   }
 
   clearSessionMemory() {
-    try {
-      sessionManager.clear();
-      windowManager.broadcastToAllWindows("session-cleared");
-      logger.info("Session memory cleared via global shortcut");
-    } catch (error) {
-      logger.error("Error clearing session memory:", error);
-    }
+    return this.shortcutController.clearSessionMemory();
   }
 
   handleUpArrow() {
-    const isInteractive = windowManager.getWindowStats().isInteractive;
-
-    if (isInteractive) {
-      // Interactive mode: Navigate to previous skill
-      this.navigateSkill(-1);
-    } else {
-      // Non-interactive mode: Move window up
-      windowManager.moveBoundWindows(0, -20);
-    }
+    return this.shortcutController.handleUpArrow();
   }
 
   handleDownArrow() {
-    const isInteractive = windowManager.getWindowStats().isInteractive;
-
-    if (isInteractive) {
-      // Interactive mode: Navigate to next skill
-      this.navigateSkill(1);
-    } else {
-      // Non-interactive mode: Move window down
-      windowManager.moveBoundWindows(0, 20);
-    }
+    return this.shortcutController.handleDownArrow();
   }
 
   handleLeftArrow() {
-    const isInteractive = windowManager.getWindowStats().isInteractive;
-
-    if (!isInteractive) {
-      // Non-interactive mode: Move window left
-      windowManager.moveBoundWindows(-20, 0);
-    }
-    // Interactive mode: Left arrow does nothing
+    return this.shortcutController.handleLeftArrow();
   }
 
   handleRightArrow() {
-    const isInteractive = windowManager.getWindowStats().isInteractive;
-
-    if (!isInteractive) {
-      // Non-interactive mode: Move window right
-      windowManager.moveBoundWindows(20, 0);
-    }
-    // Interactive mode: Right arrow does nothing
+    return this.shortcutController.handleRightArrow();
   }
 
   navigateSkill(direction) {
-    const currentIndex = availableSkills.indexOf(this.activeSkill);
-    if (currentIndex === -1) {
-      logger.warn("Current skill not found in available skills", {
-        currentSkill: this.activeSkill,
-        availableSkills,
-      });
-      return;
-    }
-
-    // Calculate new index with wrapping
-    let newIndex = currentIndex + direction;
-    if (newIndex >= availableSkills.length) {
-      newIndex = 0; // Wrap to beginning
-    } else if (newIndex < 0) {
-      newIndex = availableSkills.length - 1; // Wrap to end
-    }
-
-    const newSkill = availableSkills[newIndex];
-    this.setActiveSkill(newSkill);
-
-    logger.info("Skill navigated via global shortcut", {
-      from: availableSkills[currentIndex],
-      to: newSkill,
-      direction: direction > 0 ? "down" : "up",
-    });
-
+    return this.shortcutController.navigateSkill(direction);
   }
 
   setActiveSkill(skill) {
@@ -1111,13 +1016,8 @@ class ApplicationController {
 
     this.activeSkill = skill;
     this._speechModeGeneration += 1;
-    this._utteranceDispatchInFlight = false;
+    this.transcriptionController.resetBuffer();
     sessionManager.setActiveSkill(skill);
-    if (this._utteranceTimer) {
-      clearTimeout(this._utteranceTimer);
-      this._utteranceTimer = null;
-    }
-    this._utteranceBuffer = "";
     if (skill === "transcript") {
       windowManager.hideLLMResponse();
     }
@@ -1125,511 +1025,64 @@ class ApplicationController {
     return true;
   }
 
-  async triggerScreenshotOCR() {
-    if (this.activeSkill === "transcript") {
-      return;
-    }
-    const generation = this._speechModeGeneration;
-    if (!this.isReady) {
-      logger.warn("Screenshot requested before application ready");
-      return;
-    }
-
-    const startTime = Date.now();
-
-    try {
-      windowManager.showLLMLoading();
-
-      const capture = await captureService.captureAndProcess();
-      if (generation !== this._speechModeGeneration) return;
-
-      if (!capture.imageBuffer || !capture.imageBuffer.length) {
-        windowManager.hideLLMResponse();
-        this.broadcastOCRError("Failed to capture screenshot image");
-        return;
-      }
-
-      // Use image directly with LLM and active skill; do not send chat messages here
-      const sessionHistory = sessionManager.getOptimizedHistory();
-
-      const skillsRequiringProgrammingLanguage = ['dsa'];
-      const needsProgrammingLanguage = skillsRequiringProgrammingLanguage.includes(this.activeSkill);
-
-      this._responseSeq = (this._responseSeq || 0) + 1;
-      const messageId = `img-${Date.now()}-${this._responseSeq}`;
-      windowManager.broadcastToAllWindows("transcription-llm-response-start", {
-        messageId,
-        skill: this.activeSkill
-      });
-
-      const llmResult = await llmService.processImageWithSkillStream(
-        capture.imageBuffer,
-        capture.mimeType || 'image/png',
-        this.activeSkill,
-        sessionHistory.recent,
-        needsProgrammingLanguage ? this.codingLanguage : null,
-        (delta) => {
-          if (generation !== this._speechModeGeneration) return;
-          windowManager.broadcastToAllWindows("transcription-llm-response-chunk", {
-            messageId,
-            delta
-          });
-        }
-      );
-      if (generation !== this._speechModeGeneration) return;
-      llmResult.metadata = { ...llmResult.metadata, messageId };
-
-      sessionManager.addModelResponse(llmResult.response, {
-        skill: this.activeSkill,
-        processingTime: llmResult.metadata.processingTime,
-        usedFallback: llmResult.metadata.usedFallback,
-        isImageAnalysis: true
-      });
-
-      this.broadcastTranscriptionLLMResponse(llmResult);
-
-      windowManager.showLLMResponse(llmResult.response, {
-        skill: this.activeSkill,
-        processingTime: llmResult.metadata.processingTime,
-        usedFallback: llmResult.metadata.usedFallback,
-        isImageAnalysis: true
-      });
-    } catch (error) {
-      if (generation !== this._speechModeGeneration) return;
-      logger.error("Screenshot OCR process failed", {
-        error: error.message,
-        duration: Date.now() - startTime,
-      });
-
-      windowManager.hideLLMResponse();
-      this.broadcastOCRError(error.message);
-      
-      sessionManager.addConversationEvent({
-        role: 'system',
-        content: `Screenshot OCR failed: ${error.message}`,
-        action: 'ocr_error',
-        metadata: {
-          error: error.message
-        }
-      });
-    }
+  triggerScreenshotOCR() {
+    return this.transcriptionController.triggerScreenshotOCR();
   }
 
-  async processWithLLM(text, sessionHistory) {
-    if (this.activeSkill === "transcript") {
-      return;
-    }
-    const generation = this._speechModeGeneration;
-    try {
-      // Add user input to session memory
-      sessionManager.addUserInput(text, 'llm_input');
-
-      // Check if current skill needs programming language context
-      const skillsRequiringProgrammingLanguage = ['dsa'];
-      const needsProgrammingLanguage = skillsRequiringProgrammingLanguage.includes(this.activeSkill);
-
-      this._responseSeq = (this._responseSeq || 0) + 1;
-      const messageId = `chat-${Date.now()}-${this._responseSeq}`;
-      windowManager.broadcastToAllWindows("transcription-llm-response-start", {
-        messageId,
-        skill: this.activeSkill
-      });
-      windowManager.showLLMLoading();
-
-      const llmResult = await llmService.processTextWithSkillStream(
-        text,
-        this.activeSkill,
-        sessionHistory.recent,
-        needsProgrammingLanguage ? this.codingLanguage : null,
-        (delta) => {
-          if (generation !== this._speechModeGeneration) return;
-          windowManager.broadcastToAllWindows("transcription-llm-response-chunk", {
-            messageId,
-            delta
-          });
-        }
-      );
-      if (generation !== this._speechModeGeneration) return;
-      llmResult.metadata = { ...llmResult.metadata, messageId };
-
-      logger.info("LLM processing completed, showing response", {
-        responseLength: llmResult.response.length,
-        skill: this.activeSkill,
-        programmingLanguage: needsProgrammingLanguage ? this.codingLanguage : 'not applicable',
-        processingTime: llmResult.metadata.processingTime,
-        responsePreview: llmResult.response.substring(0, 200) + "...",
-      });
-
-      // Add LLM response to session memory
-      sessionManager.addModelResponse(llmResult.response, {
-        skill: this.activeSkill,
-        processingTime: llmResult.metadata.processingTime,
-        usedFallback: llmResult.metadata.usedFallback,
-      });
-
-      this.broadcastTranscriptionLLMResponse(llmResult);
-
-      windowManager.showLLMResponse(llmResult.response, {
-        skill: this.activeSkill,
-        processingTime: llmResult.metadata.processingTime,
-        usedFallback: llmResult.metadata.usedFallback,
-      });
-    } catch (error) {
-      if (generation !== this._speechModeGeneration) return;
-      logger.error("LLM processing failed", {
-        error: error.message,
-        skill: this.activeSkill,
-      });
-
-      windowManager.hideLLMResponse();
-      sessionManager.addConversationEvent({
-        role: 'system',
-        content: `LLM processing failed: ${error.message}`,
-        action: 'llm_error',
-        metadata: {
-          error: error.message,
-          skill: this.activeSkill
-        }
-      });
-
-      this.broadcastLLMError(error.message);
-    }
+  processWithLLM(text, sessionHistory) {
+    return this.transcriptionController.processWithLLM(text, sessionHistory);
   }
 
-  /**
-   * Buffer a transcribed fragment and (re)arm the coalesce debounce. Fragments
-   * are shown in the UI immediately so speech feels live, but the LLM is only
-   * asked once the speaker has actually paused — this is what stops one spoken
-   * line from producing two separate, slow answers.
-   */
   handleTranscriptionFragment(text) {
-    const fragment = (text || "").trim();
-    if (!fragment) {
-      return;
-    }
-
-    // Route speech UI events according to the user's response-target setting.
-    sessionManager.addUserInput(fragment, 'speech');
-    const transcriptionOnly = this.activeSkill === "transcript";
-    if (transcriptionOnly) {
-      this.sendToChatWindow("transcription-received", { text: fragment, transcriptionOnly: true });
-      if (this.shouldShowVoiceOverlay()) {
-        windowManager.showLLMResponse(fragment, {
-          skill: 'transcript',
-          isTranscriptionOnly: true
-        });
-      }
-      return;
-    }
-    this.sendToVoiceResponseWindows("transcription-received", { text: fragment, transcriptionOnly: false });
-
-    this._utteranceBuffer = this._utteranceBuffer
-      ? `${this._utteranceBuffer} ${fragment}`
-      : fragment;
-
-    if (this._utteranceTimer) {
-      clearTimeout(this._utteranceTimer);
-      this._utteranceTimer = null;
-    }
-
-    // Manual capture emits one complete transcript after the user presses stop,
-    // so no debounce/coalescing delay is needed.
-    if (speechService.isManualCaptureMode()) {
-      this.dispatchCoalescedUtterance();
-      return;
-    }
-
-    this._utteranceTimer = setTimeout(() => {
-      this._utteranceTimer = null;
-      this.dispatchCoalescedUtterance();
-    }, this._utteranceCoalesceMs);
+    return this.transcriptionController.handleTranscriptionFragment(text);
   }
 
-  /**
-   * Send the coalesced utterance to the LLM. If a previous dispatch is still
-   * running, leave the buffer intact and let that dispatch's completion pick it
-   * up — so we never pile up overlapping requests for the same person talking.
-   */
-  async dispatchCoalescedUtterance() {
-    if (this.activeSkill === "transcript") {
-      this._utteranceBuffer = "";
-      return;
-    }
-    if (this._utteranceDispatchInFlight) {
-      return;
-    }
-    const combined = this._utteranceBuffer.trim();
-    if (!combined) {
-      return;
-    }
-    this._utteranceBuffer = "";
-    this._utteranceDispatchInFlight = true;
-    const generation = this._speechModeGeneration;
-
-    try {
-      const sessionHistory = sessionManager.getOptimizedHistory();
-      await this.processTranscriptionWithLLM(combined, sessionHistory, generation);
-    } catch (error) {
-      logger.error("Failed to process transcription with LLM", {
-        error: error.message,
-        text: combined.substring(0, 100)
-      });
-    } finally {
-      if (generation === this._speechModeGeneration) {
-        this._utteranceDispatchInFlight = false;
-        // Anything that arrived while we were busy gets answered now.
-        if (this._utteranceBuffer.trim()) {
-          this.dispatchCoalescedUtterance();
-        }
-      }
-    }
+  dispatchCoalescedUtterance() {
+    return this.transcriptionController.dispatchCoalescedUtterance();
   }
 
-  async processTranscriptionWithLLM(text, sessionHistory, generation = this._speechModeGeneration) {
-    if (this.activeSkill === "transcript" || generation !== this._speechModeGeneration) {
-      return;
-    }
-    const responseSkill = this.activeSkill;
-    const isCurrentMode = () => generation === this._speechModeGeneration && this.activeSkill === responseSkill;
-    // Hoisted so the catch block can tie a fallback answer to the same UI
-    // bubble the streaming start event created; otherwise a total failure
-    // leaves an empty streamed bubble stranded next to the fallback message.
-    let messageId = null;
-    try {
-      // Validate input text
-      if (!text || typeof text !== 'string' || text.trim().length === 0) {
-        logger.warn("Skipping LLM processing for empty or invalid transcription", {
-          textType: typeof text,
-          textLength: text ? text.length : 0
-        });
-        return;
-      }
-
-      const cleanText = text.trim();
-      if (cleanText.length < 2) {
-        logger.debug("Skipping LLM processing for very short transcription", {
-          text: cleanText
-        });
-        return;
-      }
-
-      logger.info("Processing transcription with intelligent LLM response", {
-        skill: this.activeSkill,
-        textLength: cleanText.length,
-        textPreview: cleanText.substring(0, 100) + "..."
-      });
-
-      // Check if current skill needs programming language context
-      const skillsRequiringProgrammingLanguage = ['dsa'];
-      const needsProgrammingLanguage = skillsRequiringProgrammingLanguage.includes(this.activeSkill);
-
-      // Stream the answer progressively to the configured speech target.
-      // A unique messageId ties the start/chunk/final events to one bubble so
-      // the UI never duplicates or interleaves concurrent responses.
-      this._responseSeq = (this._responseSeq || 0) + 1;
-      messageId = `tr-${Date.now()}-${this._responseSeq}`;
-      this.sendToVoiceResponseWindows("transcription-llm-response-start", {
-        messageId,
-        skill: this.activeSkill
-      });
-      if (this.shouldShowVoiceOverlay()) {
-        windowManager.showLLMLoading();
-      }
-      const llmResult = await llmService.processTranscriptionWithIntelligentResponseStream(
-        cleanText,
-        responseSkill,
-        sessionHistory.recent,
-        needsProgrammingLanguage ? this.codingLanguage : null,
-        (delta) => {
-          if (!isCurrentMode()) return;
-          this.sendToVoiceResponseWindows("transcription-llm-response-chunk", {
-            messageId,
-            delta
-          });
-        }
-      );
-      if (!isCurrentMode()) return;
-      llmResult.metadata = { ...llmResult.metadata, messageId };
-
-      // Add LLM response to session memory
-      sessionManager.addModelResponse(llmResult.response, {
-        skill: this.activeSkill,
-        processingTime: llmResult.metadata.processingTime,
-        usedFallback: llmResult.metadata.usedFallback,
-        isTranscriptionResponse: true
-      });
-
-      this.sendTranscriptionLLMResponseToVoiceTargets(llmResult);
-      if (this.shouldShowVoiceOverlay()) {
-        windowManager.showLLMResponse(llmResult.response, {
-          skill: this.activeSkill,
-          processingTime: llmResult.metadata.processingTime,
-          usedFallback: llmResult.metadata.usedFallback,
-          isTranscriptionResponse: true
-        });
-      }
-
-      logger.info("Transcription LLM response completed", {
-        responseLength: llmResult.response.length,
-        skill: this.activeSkill,
-        programmingLanguage: needsProgrammingLanguage ? this.codingLanguage : 'not applicable',
-        processingTime: llmResult.metadata.processingTime
-      });
-
-    } catch (error) {
-      if (!isCurrentMode()) return;
-      logger.error("Transcription LLM processing failed", {
-        error: error.message,
-        errorStack: error.stack,
-        skill: this.activeSkill,
-        text: text ? text.substring(0, 100) : 'undefined'
-      });
-
-      // Try to provide a fallback response
-      try {
-        const fallbackResult = llmService.generateIntelligentFallbackResponse(text, this.activeSkill);
-        // Carry the streaming messageId so the target replaces the live
-        // bubble instead of leaving it stuck and appending a duplicate.
-        if (messageId) {
-          fallbackResult.metadata = { ...fallbackResult.metadata, messageId };
-        }
-
-        sessionManager.addModelResponse(fallbackResult.response, {
-          skill: this.activeSkill,
-          processingTime: fallbackResult.metadata.processingTime,
-          usedFallback: true,
-          isTranscriptionResponse: true,
-          fallbackReason: error.message
-        });
-
-        this.sendTranscriptionLLMResponseToVoiceTargets(fallbackResult);
-        if (this.shouldShowVoiceOverlay()) {
-          windowManager.showLLMResponse(fallbackResult.response, {
-            skill: this.activeSkill,
-            processingTime: fallbackResult.metadata.processingTime,
-            usedFallback: true,
-            isTranscriptionResponse: true
-          });
-        }
-        logger.info("Used fallback response for transcription", {
-          skill: this.activeSkill,
-          fallbackResponse: fallbackResult.response
-        });
-        
-      } catch (fallbackError) {
-        logger.error("Fallback response also failed", {
-          fallbackError: fallbackError.message
-        });
-
-        sessionManager.addConversationEvent({
-          role: 'system',
-          content: `Transcription LLM processing failed: ${error.message}`,
-          action: 'transcription_llm_error',
-          metadata: {
-            error: error.message,
-            skill: this.activeSkill
-          }
-        });
-      }
-    }
+  processTranscriptionWithLLM(text, sessionHistory, generation) {
+    return this.transcriptionController.processTranscriptionWithLLM(text, sessionHistory, generation);
   }
 
   broadcastOCRSuccess(ocrResult) {
-    windowManager.broadcastToAllWindows("ocr-completed", {
-      text: ocrResult.text,
-      metadata: ocrResult.metadata,
-    });
+    return this.transcriptionController.broadcastOCRSuccess(ocrResult);
   }
 
   broadcastOCRError(errorMessage) {
-    windowManager.broadcastToAllWindows("ocr-error", {
-      error: errorMessage,
-      timestamp: new Date().toISOString(),
-    });
+    return this.transcriptionController.broadcastOCRError(errorMessage);
   }
 
   broadcastLLMSuccess(llmResult) {
-    const broadcastData = {
-      response: llmResult.response,
-      metadata: llmResult.metadata,
-      skill: this.activeSkill, // Add the current active skill to the top level
-    };
-
-    logger.info("Broadcasting LLM success to all windows", {
-      responseLength: llmResult.response.length,
-      skill: this.activeSkill,
-      dataKeys: Object.keys(broadcastData),
-      responsePreview: llmResult.response.substring(0, 100) + "...",
-    });
-
-    windowManager.broadcastToAllWindows("llm-response", broadcastData);
+    return this.transcriptionController.broadcastLLMSuccess(llmResult);
   }
 
   broadcastLLMError(errorMessage) {
-    windowManager.broadcastToAllWindows("llm-error", {
-      error: errorMessage,
-      timestamp: new Date().toISOString(),
-    });
+    return this.transcriptionController.broadcastLLMError(errorMessage);
   }
 
   broadcastTranscriptionLLMResponse(llmResult) {
-    const broadcastData = {
-      response: llmResult.response,
-      metadata: llmResult.metadata,
-      messageId: llmResult.metadata && llmResult.metadata.messageId,
-      skill: this.activeSkill,
-      isTranscriptionResponse: true
-    };
-
-    logger.info("Broadcasting transcription LLM response to all windows", {
-      responseLength: llmResult.response.length,
-      skill: this.activeSkill,
-      responsePreview: llmResult.response.substring(0, 100) + "..."
-    });
-
-    windowManager.broadcastToAllWindows("transcription-llm-response", broadcastData);
+    return this.transcriptionController.broadcastTranscriptionLLMResponse(llmResult);
   }
 
   sendToChatWindow(channel, data) {
-    const chatWindow = windowManager.getWindow("chat");
-    if (!chatWindow || chatWindow.isDestroyed()) {
-      logger.warn("Chat window unavailable for speech event", { channel });
-      return;
-    }
-    chatWindow.webContents.send(channel, data);
+    return this.transcriptionController.sendToChatWindow(channel, data);
   }
 
   getVoiceResponseTarget() {
-    const configured = String(process.env.WHISPER_RESPONSE_TARGET || 'both').trim().toLowerCase();
-    return ['chat', 'overlay', 'both'].includes(configured) ? configured : 'both';
+    return this.transcriptionController.getVoiceResponseTarget();
   }
 
   shouldShowVoiceOverlay() {
-    return ['overlay', 'both'].includes(this.getVoiceResponseTarget());
+    return this.transcriptionController.shouldShowVoiceOverlay();
   }
 
   sendToVoiceResponseWindows(channel, data) {
-    const target = this.getVoiceResponseTarget();
-    if (target === 'chat' || target === 'both') {
-      this.sendToChatWindow(channel, data);
-    }
-    if (target === 'overlay' || target === 'both') {
-      const responseWindow = windowManager.getWindow("llmResponse");
-      if (responseWindow && !responseWindow.isDestroyed()) {
-        responseWindow.webContents.send(channel, data);
-      }
-    }
+    return this.transcriptionController.sendToVoiceResponseWindows(channel, data);
   }
 
   sendTranscriptionLLMResponseToVoiceTargets(llmResult) {
-    const data = {
-      response: llmResult.response,
-      metadata: llmResult.metadata,
-      messageId: llmResult.metadata && llmResult.metadata.messageId,
-      skill: this.activeSkill,
-      isTranscriptionResponse: true
-    };
-    this.sendToVoiceResponseWindows("transcription-llm-response", data);
+    return this.transcriptionController.sendTranscriptionLLMResponseToVoiceTargets(llmResult);
   }
 
   onWindowAllClosed() {

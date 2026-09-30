@@ -986,6 +986,14 @@ Remember: Be intelligent about filtering - provide quick, direct responses so th
             model: modelName
           });
 
+          // Non-retryable auth errors fail immediately
+          if (errorInfo.type === 'AUTH_ERROR') {
+            logger.error(`Authentication error with Gemini API for model ${modelName} — will not retry`, {
+              error: error.message
+            });
+            break;
+          }
+
           // For model-unavailable / overloaded / rate-limit / retired-model
           // errors, move to the next fallback model immediately instead of
           // burning all retries — a 404 "no longer available" will never
@@ -1010,12 +1018,13 @@ Remember: Be intelligent about filtering - provide quick, direct responses so th
             break; // exit retry loop for this model and try next model
           }
 
-          // Use exponential backoff with jitter for network errors
-          const baseDelay = errorInfo.isNetworkError ? 2500 : 1500;
-          const delay = baseDelay * attempt + Math.random() * 1000;
+          // Use exponential backoff (500ms -> 1000ms -> 2000ms) with jitter
+          const baseDelay = errorInfo.isNetworkError ? 800 : 500;
+          const delay = this._computeRetryDelay(attempt, baseDelay);
 
-          logger.debug(`Waiting ${delay}ms before retry ${attempt + 1}`, {
-            baseDelay,
+          logger.debug(`Waiting ${Math.round(delay)}ms before retry ${attempt + 1}`, {
+            attempt,
+            delayMs: Math.round(delay),
             isNetworkError: errorInfo.isNetworkError,
             model: modelName
           });
@@ -1150,6 +1159,14 @@ Remember: Be intelligent about filtering - provide quick, direct responses so th
             model: modelName
           });
 
+          // Non-retryable auth errors fail immediately
+          if (errorInfo.type === 'AUTH_ERROR') {
+            logger.error(`Authentication error during streaming for model ${modelName} — will not retry`, {
+              error: error.message
+            });
+            break;
+          }
+
           const isModelUnavailable = errorInfo.type === 'RATE_LIMIT_ERROR' ||
             error.message.includes('503') ||
             error.message.includes('UNAVAILABLE') ||
@@ -1166,14 +1183,27 @@ Remember: Be intelligent about filtering - provide quick, direct responses so th
             break;
           }
 
-          const baseDelay = errorInfo.isNetworkError ? 2500 : 1500;
-          const delay = baseDelay * attempt + Math.random() * 1000;
+          // Use exponential backoff (500ms -> 1000ms -> 2000ms) with jitter
+          const baseDelay = errorInfo.isNetworkError ? 800 : 500;
+          const delay = this._computeRetryDelay(attempt, baseDelay);
           await this.delay(delay);
         }
       }
     }
 
     throw lastError || new Error('Gemini streaming request failed');
+  }
+
+  /**
+   * Compute exponential backoff delay with jitter
+   * @param {number} attempt - Current attempt (1-indexed)
+   * @param {number} baseDelay - Base delay in ms (default 500ms)
+   * @param {number} maxDelay - Max delay cap in ms (default 4000ms)
+   */
+  _computeRetryDelay(attempt, baseDelay = 500, maxDelay = 4000) {
+    const expDelay = baseDelay * Math.pow(2, attempt - 1);
+    const jitter = Math.random() * 250;
+    return Math.min(maxDelay, expDelay) + jitter;
   }
 
   _streamRequestForModel(geminiRequest, modelName, apiKey, onDelta) {
@@ -1286,17 +1316,22 @@ Remember: Be intelligent about filtering - provide quick, direct responses so th
   }
 
   analyzeError(error) {
-    const errorMessage = error.message.toLowerCase();
+    const errorMessage = (error && error.message ? error.message : String(error)).toLowerCase();
     
     // Network connectivity errors
     if (errorMessage.includes('fetch failed') || 
         errorMessage.includes('network error') ||
         errorMessage.includes('enotfound') ||
         errorMessage.includes('econnrefused') ||
+        errorMessage.includes('econnreset') ||
+        errorMessage.includes('socket hang up') ||
+        errorMessage.includes('ehostunreach') ||
+        errorMessage.includes('enetunreach') ||
         errorMessage.includes('timeout')) {
       return {
         type: 'NETWORK_ERROR',
         isNetworkError: true,
+        isRetryable: true,
         suggestedAction: 'Check internet connection and firewall settings'
       };
     }
@@ -1304,22 +1339,44 @@ Remember: Be intelligent about filtering - provide quick, direct responses so th
     // API key errors
     if (errorMessage.includes('unauthorized') || 
         errorMessage.includes('invalid api key') ||
-        errorMessage.includes('forbidden')) {
+        errorMessage.includes('api_key_invalid') ||
+        errorMessage.includes('401') ||
+        errorMessage.includes('forbidden') ||
+        errorMessage.includes('403')) {
       return {
         type: 'AUTH_ERROR',
         isNetworkError: false,
+        isRetryable: false,
         suggestedAction: 'Verify Gemini API key configuration'
       };
     }
     
-    // Rate limiting
+    // Rate limiting (429 / resource exhausted)
     if (errorMessage.includes('quota') || 
         errorMessage.includes('rate limit') ||
-        errorMessage.includes('too many requests')) {
+        errorMessage.includes('too many requests') ||
+        errorMessage.includes('429') ||
+        errorMessage.includes('resource_exhausted')) {
       return {
         type: 'RATE_LIMIT_ERROR',
         isNetworkError: false,
+        isRetryable: true,
         suggestedAction: 'Wait before retrying or check API quota'
+      };
+    }
+
+    // Service unavailable / server overload (503 / 500)
+    if (errorMessage.includes('503') ||
+        errorMessage.includes('unavailable') ||
+        errorMessage.includes('high demand') ||
+        errorMessage.includes('overloaded') ||
+        errorMessage.includes('500') ||
+        errorMessage.includes('internal error')) {
+      return {
+        type: 'SERVER_ERROR',
+        isNetworkError: false,
+        isRetryable: true,
+        suggestedAction: 'Wait for upstream Gemini service to recover'
       };
     }
     
@@ -1328,6 +1385,7 @@ Remember: Be intelligent about filtering - provide quick, direct responses so th
       return {
         type: 'TIMEOUT_ERROR',
         isNetworkError: true,
+        isRetryable: true,
         suggestedAction: 'Check network latency or increase timeout'
       };
     }
@@ -1335,6 +1393,7 @@ Remember: Be intelligent about filtering - provide quick, direct responses so th
     return {
       type: 'UNKNOWN_ERROR',
       isNetworkError: false,
+      isRetryable: false,
       suggestedAction: 'Check logs for more details'
     };
   }
