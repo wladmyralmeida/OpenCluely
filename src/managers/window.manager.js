@@ -32,7 +32,7 @@ class WindowManager {
     this.focusLocked = false; // Prevent focus loops
     
     // Window binding properties
-    this.bindWindows = true; // Enable window binding by default
+    this.bindWindows = false; // Each floating window keeps the position chosen by the user
     this.windowGap = 10; // Small gap between windows
     this.boundWindowsPosition = { x: 0, y: 0 }; // Track position of bound windows
     
@@ -1349,7 +1349,6 @@ class WindowManager {
     const settingsWindow = this.windows.get('settings');
     if (settingsWindow) {
       this.showOnCurrentDesktop(settingsWindow);
-      this.centerWindow(settingsWindow); // This now positions at top-center
       
       // Notify that settings window is shown
       setTimeout(() => {
@@ -1617,6 +1616,10 @@ class WindowManager {
 
   moveWindowsToActiveScreen() {
     if (!this.currentDisplay || this.isScreenBeingShared) return;
+
+    // The active display follows the mouse pointer. Keep every overlay at the
+    // position where the user placed it instead of moving it between displays.
+    return;
 
     const { x: displayX, y: displayY, width: displayWidth, height: displayHeight } = this.currentDisplay.workArea;
     
