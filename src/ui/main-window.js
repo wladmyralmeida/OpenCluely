@@ -739,6 +739,10 @@ class MainWindowUI {
             }
             selectedInputId = settings.callAudioInputId || 'default';
             this._callAudioInputId = selectedInputId;
+            if (selectedInputId === 'system-audio-macos') {
+                logger.info('Native macOS system audio capture selected', { component: 'MainWindowUI' });
+                return;
+            }
 
             // AEC/noise suppression/AGC are tuned for a close-talk mic capturing
             // the local speaker. When the input device is a loopback route (e.g.

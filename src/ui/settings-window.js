@@ -71,6 +71,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function populateAudioSelect(select, devices, selectedId, defaultLabel, defaultId) {
         select.replaceChildren(new Option(defaultLabel, defaultId));
+        if (select === callAudioInputSelect && navigator.platform.toLowerCase().includes('mac')) {
+            select.add(new Option('Áudio do sistema (macOS 14.2+)', 'system-audio-macos'));
+        }
         devices.forEach((device, index) => {
             if (device.deviceId && device.deviceId !== 'default') {
                 select.add(new Option(device.label || `Entrada ${index + 1}`, device.deviceId));
@@ -109,7 +112,10 @@ document.addEventListener('DOMContentLoaded', () => {
             stopAudioMonitors();
             return;
         }
-        if (callAudioInputId !== 'default' && !availableAudioInputIds.has(callAudioInputId)) {
+        if (callAudioInputId === 'system-audio-macos') {
+            callMonitor.stop();
+            callAudioStatus.textContent = 'Disponível ao gravar';
+        } else if (callAudioInputId !== 'default' && !availableAudioInputIds.has(callAudioInputId)) {
             callMonitor.stop();
             callAudioStatus.textContent = 'Fonte indisponível';
         } else {

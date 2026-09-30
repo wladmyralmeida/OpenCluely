@@ -4,6 +4,7 @@
   "description": "AI Problem Solving Assistant",
   "main": "main.js",
   "scripts": {
+    "prestart": "node scripts/build-system-audio-helper.js",
     "start": "env -u ELECTRON_RUN_AS_NODE electron .",
     "dev": "env -u ELECTRON_RUN_AS_NODE electron . --no-sandbox --disable-gpu",
     "test-speech": "node scripts/test-speech.js",
@@ -46,6 +47,7 @@
     "electron-builder": "^24.13.3"
   },
   "build": {
+    "beforePack": "./scripts/build-system-audio-helper.js",
     "appId": "com.opencluely.app",
     "productName": "OpenCluely",
     "directories": {
@@ -68,6 +70,12 @@
       "assests/icons/**/*",
       "prompts/**/*",
       "scripts/whisper_worker.py"
+    ],
+    "extraResources": [
+      {
+        "from": "bin/system-audio-helper.app",
+        "to": "system-audio-helper.app"
+      }
     ],
     "mac": {
       "category": "public.app-category.utilities",
@@ -93,7 +101,8 @@
       "extendInfo": {
         "NSMicrophoneUsageDescription": "OpenCluely uses the microphone to transcribe your speech locally with Whisper.",
         "NSCameraUsageDescription": "OpenCluely does not record video; this entitlement is only present for media-capture compatibility.",
-        "NSScreenCaptureUsageDescription": "OpenCluely captures the screen to read on-screen content for AI assistance."
+        "NSScreenCaptureUsageDescription": "OpenCluely captures the screen to read on-screen content for AI assistance.",
+        "NSAudioCaptureUsageDescription": "OpenCluely captures system audio to transcribe the other participants in a call."
       }
     },
     "win": {

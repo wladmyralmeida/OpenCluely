@@ -712,7 +712,14 @@ class SpeechService extends EventEmitter {
     // and a child-process mic that the system TCC prompt can't attribute. The
     // renderer path uses getUserMedia, which macOS prompts for cleanly via the
     // app's NSMicrophoneUsageDescription. Linux keeps the native recorder path.
-    this.useRendererCapture = process.platform === 'win32' || process.platform === 'darwin';
+    this.usesSystemAudioCapture = process.platform === 'darwin' && this._getSetting('callAudioInputId') === 'system-audio-macos';
+    this.useRendererCapture = (process.platform === 'win32' || process.platform === 'darwin') && !this.usesSystemAudioCapture;
+    if (this.usesSystemAudioCapture) {
+      this.emit('system-audio-start');
+      this.emit('status', 'Capturando áudio do sistema…');
+      if (!this._isManualCaptureMode()) this._startSegmentWatchdog();
+      return;
+    }
     if (this.useRendererCapture) {
       this.emit('status', 'Waiting for microphone audio…');
       // The renderer starts sending chunks once it receives the recording-started event.
@@ -950,6 +957,7 @@ class SpeechService extends EventEmitter {
     }
 
     this.isRecording = false;
+    if (this.usesSystemAudioCapture) this.emit('system-audio-stop');
     const sessionDuration = this.sessionStartTime ? Date.now() - this.sessionStartTime : 0;
     logger.info('Stopping speech recognition session', {
       provider: this.provider,
@@ -1076,6 +1084,7 @@ class SpeechService extends EventEmitter {
     this._resetVadState();
     this._audioDataLogged = false;
     this.useRendererCapture = false;
+    this.usesSystemAudioCapture = false;
   }
 
   async recognizeFromFile(audioFilePath) {
@@ -1209,7 +1218,7 @@ class SpeechService extends EventEmitter {
   }
 
   updateSettings(settings = {}) {
-    const speechKeys = ['speechProvider', 'azureKey', 'azureRegion', 'whisperCommand', 'whisperModelDir', 'whisperModel', 'whisperLanguage', 'whisperCaptureMode', 'whisperDevice', 'whisperSegmentMs'];
+    const speechKeys = ['speechProvider', 'azureKey', 'azureRegion', 'whisperCommand', 'whisperModelDir', 'whisperModel', 'whisperLanguage', 'whisperCaptureMode', 'whisperDevice', 'whisperSegmentMs', 'callAudioInputId'];
     let changed = false;
 
     for (const key of speechKeys) {

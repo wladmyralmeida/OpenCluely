@@ -102,7 +102,9 @@ process.on("unhandledRejection", (reason) => {
 // Screen capture (image-based)
 const captureService = require("./src/services/capture.service");
 const speechService = require("./src/services/speech.service");
+const { SystemAudioService } = require("./src/services/system-audio.service");
 const llmService = require("./src/services/llm.service");
+const systemAudioService = new SystemAudioService();
 
 // Managers
 const windowManager = require("./src/managers/window.manager");
@@ -419,6 +421,22 @@ class ApplicationController {
   }
 
   setupServiceEventHandlers() {
+    systemAudioService.on("audio", (chunk) => speechService.handleAudioChunkFromRenderer(chunk));
+    systemAudioService.on("status", (status) => logger.info("System audio helper", { status }));
+    systemAudioService.on("error", (error) => {
+      speechService.emit("error", error.message);
+      speechService.stopRecording();
+    });
+    speechService.on("system-audio-start", () => {
+      try {
+        systemAudioService.start();
+        speechService.emit("status", "Capturando áudio do sistema…");
+      } catch (error) {
+        speechService.emit("error", error.message);
+        speechService.stopRecording();
+      }
+    });
+    speechService.on("system-audio-stop", () => systemAudioService.stop());
     speechService.on("recording-started", () => {
       windowManager.handleRecordingStarted();
     });
