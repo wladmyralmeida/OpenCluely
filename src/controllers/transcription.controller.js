@@ -15,6 +15,17 @@ class TranscriptionController {
     this.utteranceDispatchInFlight = false;
     this.utteranceCoalesceMs = 150;
     this.responseSeq = 0;
+    this.translateToPortuguese = false;
+  }
+
+  setTranslationEnabled(enabled) {
+    this.translateToPortuguese = !!enabled;
+    logger.info('Transcription Portuguese translation toggled', { enabled: this.translateToPortuguese });
+    return this.translateToPortuguese;
+  }
+
+  isTranslationEnabled() {
+    return this.translateToPortuguese;
   }
 
   resetBuffer() {
@@ -41,7 +52,7 @@ class TranscriptionController {
   /**
    * Buffer a transcribed fragment and (re)arm the coalesce debounce.
    */
-  handleTranscriptionFragment(text) {
+  async handleTranscriptionFragment(text) {
     const fragment = (text || "").trim();
     if (!fragment) {
       return;
@@ -50,20 +61,42 @@ class TranscriptionController {
     // Save spoken speech to call transcript file
     transcriptLogger.logSpeech(fragment, 'SPEAKER');
 
+    // Optional Portuguese translation
+    let translationPT = null;
+    if (this.translateToPortuguese) {
+      try {
+        translationPT = await this.llmService.translateToPortuguese(fragment);
+      } catch (err) {
+        logger.warn('Failed to translate transcription fragment', { error: err.message });
+      }
+    }
+
     // Route speech UI events according to the user's response-target setting.
     this.sessionManager.addUserInput(fragment, 'speech');
     const transcriptionOnly = this.activeSkill === "transcript";
     if (transcriptionOnly) {
-      this.sendToChatWindow("transcription-received", { text: fragment, transcriptionOnly: true });
+      this.sendToChatWindow("transcription-received", {
+        text: fragment,
+        translationPT,
+        transcriptionOnly: true
+      });
       if (this.shouldShowVoiceOverlay()) {
-        this.windowManager.showLLMResponse(fragment, {
+        const displayText = translationPT
+          ? `**Original:** ${fragment}\n\n**Português:** ${translationPT}`
+          : fragment;
+        this.windowManager.showLLMResponse(displayText, {
           skill: 'transcript',
-          isTranscriptionOnly: true
+          isTranscriptionOnly: true,
+          translationPT
         });
       }
       return;
     }
-    this.sendToVoiceResponseWindows("transcription-received", { text: fragment, transcriptionOnly: false });
+    this.sendToVoiceResponseWindows("transcription-received", {
+      text: fragment,
+      translationPT,
+      transcriptionOnly: false
+    });
 
     this.utteranceBuffer = this.utteranceBuffer
       ? `${this.utteranceBuffer} ${fragment}`

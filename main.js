@@ -725,6 +725,15 @@ class ApplicationController {
       return { success: true, path: transcriptLogger.transcriptsDir };
     });
 
+    // Transcription translation toggle handlers
+    ipcMain.handle("set-transcription-translation", (event, enabled) => {
+      return this.transcriptionController.setTranslationEnabled(enabled);
+    });
+
+    ipcMain.handle("get-transcription-translation-status", () => {
+      return this.transcriptionController.isTranslationEnabled();
+    });
+
     // Window binding IPC handlers
     ipcMain.handle("set-window-binding", (event, enabled) => {
       return windowManager.setWindowBinding(enabled);

@@ -99,6 +99,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getCallTranscripts: () => ipcRenderer.invoke('get-call-transcripts'),
   getCallTranscriptContent: (pathOrName) => ipcRenderer.invoke('get-call-transcript-content', pathOrName),
   openTranscriptsFolder: () => ipcRenderer.invoke('open-transcripts-folder'),
+  setTranscriptionTranslation: (enabled) => ipcRenderer.invoke('set-transcription-translation', enabled),
+  getTranscriptionTranslationStatus: () => ipcRenderer.invoke('get-transcription-translation-status'),
   
   // Event listeners
   onTranscriptionReceived: (callback) => ipcRenderer.on('transcription-received', callback),

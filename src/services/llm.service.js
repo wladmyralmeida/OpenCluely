@@ -1446,6 +1446,41 @@ Remember: Be intelligent about filtering - provide quick, direct responses so th
     });
   }
 
+  /**
+   * Fast translation of transcription text to Brazilian Portuguese
+   * @param {string} text - Source text
+   * @returns {Promise<string>} Translated text in Portuguese
+   */
+  async translateToPortuguese(text) {
+    if (!text || !text.trim()) return '';
+    const cleanText = text.trim();
+
+    if (!this.client || !this.apiKey) {
+      return cleanText;
+    }
+
+    try {
+      const prompt = `Translate the following speech transcription into natural Brazilian Portuguese. Return ONLY the translated Portuguese text without any intro, commentary, or quotation marks:\n\n${cleanText}`;
+      
+      const configObj = this.getGenerationConfig({
+        temperature: 0.1,
+        maxOutputTokens: 256
+      });
+
+      const result = await this.client.models.generateContent({
+        model: this.model,
+        contents: prompt,
+        config: configObj
+      });
+
+      const { text: translated } = this.extractTextFromCandidates(result);
+      return (translated || cleanText).trim();
+    } catch (err) {
+      logger.warn('Failed to translate transcription to Portuguese', { error: err.message });
+      return cleanText;
+    }
+  }
+
   generateFallbackResponse(text, activeSkill) {
     logger.info('Generating fallback response', { activeSkill });
 

@@ -75,6 +75,11 @@
         background: rgba(255, 255, 255, 0.22);
         color: #fff;
       }
+      .icon-button.active {
+        background: rgba(76, 175, 80, 0.35);
+        border-color: rgba(76, 175, 80, 0.6);
+        color: #a5d6a7;
+      }
       .recording-indicator {
         width: 8px;
         height: 8px;
@@ -123,6 +128,50 @@
         background: rgba(76, 175, 80, 0.15);
         animation: fadeInSlide 0.1s ease-out;
         position: relative;
+      }
+      .message.transcription-bilingual {
+        background: rgba(76, 175, 80, 0.12);
+        border-left: 3px solid #4caf50;
+      }
+      .bilingual-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-top: 6px;
+      }
+      @media (max-width: 540px) {
+        .bilingual-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+      .bilingual-column {
+        background: rgba(0, 0, 0, 0.25);
+        border-radius: 6px;
+        padding: 8px 10px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+      .bilingual-col-header {
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 5px;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .bilingual-col-header.en {
+        color: #64b5f6;
+      }
+      .bilingual-col-header.pt {
+        color: #81c784;
+      }
+      .bilingual-text {
+        font-size: 13px;
+        line-height: 1.4;
+        color: rgba(255, 255, 255, 0.95);
+        word-break: break-word;
+        white-space: pre-wrap;
       }
 
       .message.transcription::before {
@@ -682,6 +731,9 @@
           <div class="recording-indicator" id="recordingIndicator"></div>
         </div>
         <div class="header-actions">
+          <button class="icon-button" id="translateToggleBtn" title="Traduzir transcrição para Português (Lado a Lado)" style="font-size: 11px; padding: 4px 8px; display: inline-flex; align-items: center; gap: 4px;">
+            <i class="fas fa-language"></i> <span id="translateToggleLabel" style="font-size: 10px; font-weight: 600;">PT: OFF</span>
+          </button>
           <button class="icon-button" id="clearHistoryBtn" title="Clear chat history">
             <i class="fas fa-trash"></i>
           </button>
@@ -734,9 +786,12 @@
       const listeningDuration = document.getElementById('listeningDuration');
       const interimOverlay = document.getElementById('interimOverlay');
       const clearHistoryBtn = document.getElementById('clearHistoryBtn');
+      const translateToggleBtn = document.getElementById('translateToggleBtn');
+      const translateToggleLabel = document.getElementById('translateToggleLabel');
 
       let isRecording = false;
       let isInteractive = true;
+      let isTranslationEnabled = false;
       let listeningStartTime = null;
       let listeningTimer = null;
       let speechAvailable = false;
@@ -782,6 +837,8 @@
                 addMessage(item.text, item.type, true);
               } else if (item.kind === 'snippet') {
                 addCodeSnippet(item.language, item.code, true);
+              } else if (item.kind === 'bilingual_transcription') {
+                addBilingualTranscription(item.originalText, item.translationPT, true);
               }
             });
           }
@@ -1009,13 +1066,18 @@
         addMessage('Stopped Listening', 'system');
       }
 
-      function handleTranscription(text, transcriptionOnly = false) {
+      function handleTranscription(text, transcriptionOnly = false, translationPT = null) {
         if (text && typeof text === 'string' && text.trim().length > 0) {
           // Hide listening animation first
           hideListeningAnimation();
 
-          // Render transcribed text immediately without delay
-          addMessage(text.trim(), 'transcription');
+          // If translation is present, render side-by-side bilingual view
+          if (translationPT && typeof translationPT === 'string' && translationPT.trim().length > 0) {
+            addBilingualTranscription(text.trim(), translationPT.trim());
+          } else {
+            // Render transcribed text immediately without delay
+            addMessage(text.trim(), 'transcription');
+          }
           
           // Only show thinking indicator if this is an AI response mode
           if (!transcriptionOnly && currentSkill !== 'transcript') {
@@ -1023,6 +1085,48 @@
           }
         } else {
           console.warn('Invalid or empty transcription text - ignoring:', text);
+        }
+      }
+
+      function addBilingualTranscription(originalText, translationPT, skipPersist = false) {
+        if (!chatMessages) return;
+
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'message transcription transcription-bilingual';
+
+        const timeDiv = document.createElement('div');
+        timeDiv.className = 'message-time';
+        timeDiv.textContent = new Date().toLocaleTimeString();
+
+        const grid = document.createElement('div');
+        grid.className = 'bilingual-grid';
+
+        const colOrig = document.createElement('div');
+        colOrig.className = 'bilingual-column';
+        colOrig.innerHTML = `
+          <div class="bilingual-col-header en"><i class="fas fa-comment"></i> Original</div>
+          <div class="bilingual-text">${escapeHtml(originalText)}</div>
+        `;
+
+        const colPT = document.createElement('div');
+        colPT.className = 'bilingual-column';
+        colPT.innerHTML = `
+          <div class="bilingual-col-header pt"><i class="fas fa-language"></i> Tradução (PT-BR)</div>
+          <div class="bilingual-text">${escapeHtml(translationPT)}</div>
+        `;
+
+        grid.appendChild(colOrig);
+        grid.appendChild(colPT);
+
+        messageDiv.appendChild(timeDiv);
+        messageDiv.appendChild(grid);
+
+        chatMessages.appendChild(messageDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+
+        if (!skipPersist) {
+          chatHistory.push({ kind: 'bilingual_transcription', originalText, translationPT });
+          saveHistory();
         }
       }
 
@@ -1212,7 +1316,7 @@
       if (whysperAPI) {
         whysperAPI.onTranscriptionReceived((event, data) => {
           if (data && data.text) {
-            handleTranscription(data.text, data.transcriptionOnly);
+            handleTranscription(data.text, data.transcriptionOnly, data.translationPT);
           } else {
             console.warn('Invalid transcription data received:', data);
           }
@@ -1292,6 +1396,37 @@
             finalizeStreamingResponse(data.messageId, data.response);
           }
         });
+      }
+
+      function updateTranslationBtnUI(enabled) {
+        isTranslationEnabled = !!enabled;
+        if (translateToggleBtn) {
+          if (isTranslationEnabled) {
+            translateToggleBtn.classList.add('active');
+            if (translateToggleLabel) translateToggleLabel.textContent = 'PT: ON';
+          } else {
+            translateToggleBtn.classList.remove('active');
+            if (translateToggleLabel) translateToggleLabel.textContent = 'PT: OFF';
+          }
+        }
+      }
+
+      if (translateToggleBtn && whysperAPI && whysperAPI.setTranscriptionTranslation) {
+        translateToggleBtn.addEventListener('click', async () => {
+          try {
+            const nextState = !isTranslationEnabled;
+            const res = await whysperAPI.setTranscriptionTranslation(nextState);
+            updateTranslationBtnUI(res ? res.enabled : nextState);
+          } catch (e) {
+            console.error('Failed to toggle translation:', e);
+          }
+        });
+
+        if (whysperAPI.getTranscriptionTranslationStatus) {
+          whysperAPI.getTranscriptionTranslationStatus().then(res => {
+            if (res) updateTranslationBtnUI(res.enabled);
+          }).catch(console.error);
+        }
       }
 
       // UI Event Listeners
