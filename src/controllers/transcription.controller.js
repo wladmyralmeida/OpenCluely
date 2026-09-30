@@ -1,4 +1,5 @@
 const logger = require('../core/logger').createServiceLogger('TRANSCRIPTION_CTRL');
+const transcriptLogger = require('../managers/transcript-logger.manager');
 
 class TranscriptionController {
   constructor({ appController, windowManager, speechService, sessionManager, llmService, captureService }) {
@@ -45,6 +46,9 @@ class TranscriptionController {
     if (!fragment) {
       return;
     }
+
+    // Save spoken speech to call transcript file
+    transcriptLogger.logSpeech(fragment, 'SPEAKER');
 
     // Route speech UI events according to the user's response-target setting.
     this.sessionManager.addUserInput(fragment, 'speech');
@@ -187,6 +191,9 @@ class TranscriptionController {
         isTranscriptionResponse: true
       });
 
+      // Log AI answer to call transcript
+      transcriptLogger.logAIResponse(llmResult.response);
+
       this.sendTranscriptionLLMResponseToVoiceTargets(llmResult);
       if (this.shouldShowVoiceOverlay()) {
         this.windowManager.showLLMResponse(llmResult.response, {
@@ -305,6 +312,9 @@ class TranscriptionController {
         processingTime: llmResult.metadata.processingTime,
         usedFallback: llmResult.metadata.usedFallback,
       });
+
+      // Log AI answer to call transcript
+      transcriptLogger.logAIResponse(llmResult.response);
 
       this.broadcastTranscriptionLLMResponse(llmResult);
 

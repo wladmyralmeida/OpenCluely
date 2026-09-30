@@ -109,6 +109,7 @@ const systemAudioService = new SystemAudioService();
 // Managers
 const windowManager = require("./src/managers/window.manager");
 const sessionManager = require("./src/managers/session.manager");
+const transcriptLogger = require("./src/managers/transcript-logger.manager");
 const availableSkills = ["interview", "dsa", "transcript"];
 
 // Controllers
@@ -446,10 +447,15 @@ class ApplicationController {
     });
     speechService.on("system-audio-stop", () => systemAudioService.stop());
     speechService.on("recording-started", () => {
+      transcriptLogger.startSession(this.activeSkill);
       windowManager.handleRecordingStarted();
     });
 
     speechService.on("recording-stopped", () => {
+      const savedPath = transcriptLogger.endSession();
+      if (savedPath) {
+        windowManager.broadcastToAllWindows("transcript-saved", { path: savedPath });
+      }
       windowManager.handleRecordingStopped();
     });
 
@@ -702,6 +708,21 @@ class ApplicationController {
 
     ipcMain.handle("get-system-diagnostics", async () => {
       return this.getSystemDiagnostics();
+    });
+
+    // Call transcript IPC handlers
+    ipcMain.handle("get-call-transcripts", () => {
+      return transcriptLogger.listTranscripts();
+    });
+
+    ipcMain.handle("get-call-transcript-content", (event, fileNameOrPath) => {
+      return transcriptLogger.getTranscriptContent(fileNameOrPath);
+    });
+
+    ipcMain.handle("open-transcripts-folder", async () => {
+      const { shell } = require("electron");
+      await shell.openPath(transcriptLogger.transcriptsDir);
+      return { success: true, path: transcriptLogger.transcriptsDir };
     });
 
     // Window binding IPC handlers

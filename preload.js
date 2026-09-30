@@ -94,6 +94,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Display management
   listDisplays: () => ipcRenderer.invoke('list-displays'),
   captureArea: (options) => ipcRenderer.invoke('capture-area', options),
+
+  // Call Transcripts
+  getCallTranscripts: () => ipcRenderer.invoke('get-call-transcripts'),
+  getCallTranscriptContent: (pathOrName) => ipcRenderer.invoke('get-call-transcript-content', pathOrName),
+  openTranscriptsFolder: () => ipcRenderer.invoke('open-transcripts-folder'),
   
   // Event listeners
   onTranscriptionReceived: (callback) => ipcRenderer.on('transcription-received', callback),
@@ -117,6 +122,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onInteractionModeChanged: (callback) => ipcRenderer.on('interaction-mode-changed', callback),
   onRecordingStarted: (callback) => ipcRenderer.on('recording-started', callback),
   onRecordingStopped: (callback) => ipcRenderer.on('recording-stopped', callback),
+  onTranscriptSaved: (callback) => ipcRenderer.on('transcript-saved', callback),
   onCodingLanguageChanged: (callback) => ipcRenderer.on('coding-language-changed', callback),
   onMainWindowShown: (callback) => ipcRenderer.on('main-window-shown', callback),
   
