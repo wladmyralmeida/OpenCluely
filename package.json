@@ -181,5 +181,8 @@
         "height": 400
       }
     }
+  },
+  "allowScripts": {
+    "electron@29.4.6": true
   }
 }
