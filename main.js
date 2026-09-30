@@ -185,6 +185,25 @@ class ApplicationController {
     app.on("activate", () => this.onActivate());
     app.on("will-quit", () => this.onWillQuit());
 
+    // Handle SSL certificate errors (e.g. corporate VPN / proxy SSL inspection).
+    // Electron uses BoringSSL which does not automatically trust custom root CAs
+    // added to the macOS keychain.  This handler logs the failure and allows the
+    // connection to proceed so the app works on networks that perform TLS
+    // inspection.  Node-side HTTPS calls (Gemini SDK) are covered by setting
+    // NODE_TLS_REJECT_UNAUTHORIZED=0 below; Electron fetch calls are covered here.
+    app.on("certificate-error", (_event, _webContents, url, error, _cert, callback) => {
+      logger.warn("SSL certificate error — proceeding (may be behind a VPN/proxy)", {
+        url,
+        error
+      });
+      callback(true); // allow the request to continue
+    });
+
+    // Make Node-side HTTPS (Gemini SDK, axios, etc.) tolerate the same proxy CAs.
+    // This mirrors what `NODE_TLS_REJECT_UNAUTHORIZED=0` does on the CLI without
+    // requiring callers to set the env var manually.
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+
     this.setupIPCHandlers();
     this.setupServiceEventHandlers();
   }
