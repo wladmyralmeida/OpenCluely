@@ -1635,6 +1635,13 @@ class WindowManager {
     
     this.windows.forEach((window, type) => {
       if (window && !window.isDestroyed()) {
+        // The live-transcription chat is positioned once when it is created.
+        // It must not follow the cursor between displays: keep the position
+        // chosen by the user when they drag it.
+        if (type === 'chat') {
+          return;
+        }
+
         // Skip main and llmResponse if they're bound (already handled above)
         if (this.bindWindows && (type === 'main' || type === 'llmResponse')) {
           return;
