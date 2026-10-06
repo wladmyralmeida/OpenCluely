@@ -79,7 +79,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 select.add(new Option(device.label || `Entrada ${index + 1}`, device.deviceId));
             }
         });
-        if (selectedId !== defaultId && !availableAudioInputIds.has(selectedId)) {
+        if (selectedId !== defaultId && selectedId !== 'system-audio-macos' && !availableAudioInputIds.has(selectedId)) {
             select.add(new Option('Dispositivo indisponível', selectedId));
         }
         select.value = selectedId;

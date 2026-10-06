@@ -332,7 +332,7 @@ class SpeechService extends EventEmitter {
     // and a child-process mic that the system TCC prompt can't attribute. The
     // renderer path uses getUserMedia, which macOS prompts for cleanly via the
     // app's NSMicrophoneUsageDescription. Linux keeps the native recorder path.
-    this.usesSystemAudioCapture = process.platform === 'darwin' && this._getSetting('callAudioInputId') === 'system-audio-macos';
+    this.usesSystemAudioCapture = process.platform === 'darwin' && this._getCallAudioInputId() === 'system-audio-macos';
     this.useRendererCapture = (process.platform === 'win32' || process.platform === 'darwin') && !this.usesSystemAudioCapture;
     if (this.usesSystemAudioCapture) {
       this.emit('system-audio-start');
@@ -421,7 +421,7 @@ class SpeechService extends EventEmitter {
    * the current Whisper segment buffer.
    */
   handleAudioChunkFromRenderer(chunk) {
-    if (!this.isRecording || this.provider !== 'whisper' || !this.useRendererCapture) {
+    if (!this.isRecording || this.provider !== 'whisper' || (!this.useRendererCapture && !this.usesSystemAudioCapture)) {
       return;
     }
     if (!chunk || !chunk.length) {
@@ -807,7 +807,8 @@ class SpeechService extends EventEmitter {
         whisperLanguage: this._getWhisperLanguage(),
         whisperCaptureMode: this._getWhisperCaptureMode(),
         whisperDevice: this._getWhisperDevice(),
-        whisperSegmentMs: String(this._getWhisperSegmentMs())
+        whisperSegmentMs: String(this._getWhisperSegmentMs()),
+        callAudioInputId: this._getCallAudioInputId()
       },
       config: {
         azure: config.get('speech.azure') || {},
@@ -840,9 +841,10 @@ class SpeechService extends EventEmitter {
     this.whisperWorker.close();
   }
 
-  updateSettings(settings = {}) {
+  updateSettings(settings = {}, options = {}) {
     const speechKeys = ['speechProvider', 'azureKey', 'azureRegion', 'whisperCommand', 'whisperModelDir', 'whisperModel', 'whisperLanguage', 'whisperCaptureMode', 'whisperDevice', 'whisperSegmentMs', 'callAudioInputId'];
     let changed = false;
+    const oldCallAudioInputId = this._getCallAudioInputId();
 
     for (const key of speechKeys) {
       if (Object.prototype.hasOwnProperty.call(settings, key)) {
@@ -851,7 +853,21 @@ class SpeechService extends EventEmitter {
       }
     }
 
-    if (changed) {
+    const newCallAudioInputId = this._getCallAudioInputId();
+    if (this.isRecording && this.provider === 'whisper' && oldCallAudioInputId !== newCallAudioInputId) {
+      const newUsesSystem = process.platform === 'darwin' && newCallAudioInputId === 'system-audio-macos';
+      if (newUsesSystem && !this.usesSystemAudioCapture) {
+        this.usesSystemAudioCapture = true;
+        this.useRendererCapture = false;
+        this.emit('system-audio-start');
+      } else if (!newUsesSystem && this.usesSystemAudioCapture) {
+        this.emit('system-audio-stop');
+        this.usesSystemAudioCapture = false;
+        this.useRendererCapture = true;
+      }
+    }
+
+    if (changed && options.reinitialize !== false && !this.isRecording) {
       this.initializeClient();
     }
 
@@ -948,6 +964,10 @@ class SpeechService extends EventEmitter {
 
   _getVadEnergyFloor() {
     return this._vadNumber('whisperVadEnergyFloor', 'WHISPER_VAD_ENERGY_FLOOR', 'speech.whisper.vadEnergyFloor', 0.008, 0.0005);
+  }
+
+  _getCallAudioInputId() {
+    return this._getSetting('callAudioInputId') || process.env.CALL_AUDIO_INPUT_ID || 'default';
   }
 
   _getSetting(key) {

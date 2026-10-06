@@ -30,14 +30,29 @@ async function runTests() {
   console.log('  PASS: Config validation and getters working as expected');
 
   // Test 2: SystemAudioService
-  console.log('2. Testing SystemAudioService Reconnect Logic...');
+  console.log('2. Testing SystemAudioService Reconnect Logic & Speech Ingestion...');
   const { SystemAudioService } = require('../src/services/system-audio.service');
   const sysAudio = new SystemAudioService();
   assert.strictEqual(sysAudio.isRunning, false);
   assert.strictEqual(sysAudio.reconnectAttempts, 0);
   assert.strictEqual(typeof sysAudio.start, 'function');
   assert.strictEqual(typeof sysAudio.stop, 'function');
-  console.log('  PASS: SystemAudioService initialized correctly');
+
+  // Verify speechService accepts chunks when system audio is active
+  const speechService = require('../src/services/speech.service');
+  speechService.isRecording = true;
+  speechService.provider = 'whisper';
+  speechService.usesSystemAudioCapture = true;
+  speechService.useRendererCapture = false;
+  let chunkIngested = false;
+  const originalIngest = speechService._ingestWhisperAudio;
+  speechService._ingestWhisperAudio = () => { chunkIngested = true; };
+  speechService.handleAudioChunkFromRenderer(Buffer.from([0, 0, 1, 0]));
+  speechService._ingestWhisperAudio = originalIngest;
+  speechService.isRecording = false;
+  assert.strictEqual(chunkIngested, true, 'SpeechService should ingest audio chunks when usesSystemAudioCapture is true');
+
+  console.log('  PASS: SystemAudioService initialized correctly & chunks ingested');
 
   // Test 3: PromptLoader reloadPrompts
   console.log('3. Testing PromptLoader reloadPrompts...');

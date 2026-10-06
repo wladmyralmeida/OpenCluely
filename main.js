@@ -1284,6 +1284,8 @@ class ApplicationController {
 
       const persistedKeys = this.persistEnvUpdates(envUpdates);
 
+      speechService.updateSettings(settings);
+
       if (callAudioInputChanged || micAudioInputChanged) {
         windowManager.broadcastToAllWindows("audio-input-settings-changed", {
           callAudioInputId: process.env.CALL_AUDIO_INPUT_ID || "default",
