@@ -1625,6 +1625,121 @@ ${speechLines.length > 10 ? `\n_... e mais ${speechLines.length - 10} falas regi
     return fallback;
   }
 
+  /**
+   * Generate 3 fast, strategic talking points (Smart Talking Points) for a question or discussion topic
+   * @param {string} questionText - Spoken question or topic
+   * @param {string} activeSkill - Active skill (e.g. 'interview', 'dsa')
+   * @param {Array} sessionMemory - Recent conversation exchanges
+   * @returns {Promise<{ points: string[], raw: string }>}
+   */
+  async generateSmartTalkingPoints(questionText, activeSkill = 'interview', sessionMemory = []) {
+    if (!questionText || typeof questionText !== 'string' || !questionText.trim()) {
+      return { points: [], raw: '' };
+    }
+
+    const cleanQuestion = questionText.trim();
+    if (cleanQuestion.length < 5) {
+      return { points: [], raw: '' };
+    }
+
+    const apiKey = config.getApiKey('GEMINI');
+    if (!this.client || !apiKey || apiKey === 'your-api-key-here') {
+      return this._generateTalkingPointsFallback(cleanQuestion, activeSkill);
+    }
+
+    try {
+      const interviewContext = this._loadInterviewContext();
+      const systemPrompt = `Você é um co-piloto de IA de altíssima velocidade para candidatos em entrevistas técnicas e comportamentais.
+O entrevistador acabou de fazer uma pergunta. Seu objetivo é gerar EXATAMENTE 3 marcadores estratégicos de resposta rápida (Talking Points).
+Eles devem permitir que o candidato comece a falar nos próximos 3 segundos com segurança e sem hesitar, cobrindo a resposta em alto nível enquanto elabora os detalhes.
+
+Regras de Ouro:
+1. Retorne EXATAMENTE 3 tópicos numerados:
+1. [Abordagem Direta]: ...
+2. [Exemplo Concreto / Arquitetura]: ...
+3. [Trade-off / Diferencial]: ...
+2. Seja ultra-conciso: no máximo 10 a 14 palavras por ponto.
+3. Use tom de candidato em primeira pessoa ("Abordar via...", "Citar caso de uso com...", "Destacar trade-off de...").
+4. Idioma preferencial: Português do Brasil (ou o idioma da pergunta).
+5. Não adicione introduções, conclusões ou saudações. Apenas os 3 tópicos numerados.${interviewContext}`;
+
+      const userPrompt = `Pergunta do Entrevistador:\n"${cleanQuestion}"\n\nGere os 3 Talking Points estratégicos agora:`;
+
+      const request = {
+        contents: [{
+          role: 'user',
+          parts: [{ text: userPrompt }]
+        }],
+        systemInstruction: {
+          role: 'system',
+          parts: [{ text: systemPrompt }]
+        },
+        generationConfig: this.getGenerationConfig({
+          temperature: 0.3,
+          maxOutputTokens: 220,
+          thinkingConfig: { thinkingBudget: 0 }
+        })
+      };
+
+      const rawResponse = await this.executeRequest(request);
+      const points = this._parseTalkingPoints(rawResponse);
+      return {
+        points: points.length > 0 ? points : this._generateTalkingPointsFallback(cleanQuestion, activeSkill).points,
+        raw: rawResponse
+      };
+    } catch (err) {
+      logger.warn('Failed to generate smart talking points via Gemini, using fallback', { error: err.message });
+      return this._generateTalkingPointsFallback(cleanQuestion, activeSkill);
+    }
+  }
+
+  _parseTalkingPoints(text) {
+    if (!text || typeof text !== 'string') return [];
+    const lines = text.split('\n')
+      .map(l => l.trim())
+      .filter(l => l.length > 0 && (/^(\d+[\.\)]|[-•*])\s+/.test(l) || l.includes('[')));
+
+    const extracted = [];
+    for (const line of lines) {
+      const cleaned = line.replace(/^(\d+[\.\)]|[-•*])\s*/, '').trim();
+      if (cleaned.length > 3) {
+        extracted.push(cleaned);
+        if (extracted.length >= 3) break;
+      }
+    }
+    return extracted;
+  }
+
+  _generateTalkingPointsFallback(questionText, activeSkill = 'interview') {
+    const lower = questionText.toLowerCase();
+    let p1 = 'Abordagem Direta: Definir o conceito principal e a arquitetura adotada';
+    let p2 = 'Exemplo Prático: Ilustrar com um caso de uso real de produção';
+    let p3 = 'Trade-offs: Discutir consistência, escalabilidade e pontos de atenção';
+
+    if (lower.includes('kafka') || lower.includes('queue') || lower.includes('mensageria') || lower.includes('event')) {
+      p1 = 'Abordagem: Explicar desacoplamento assíncrono com partitioning keys e tópicos';
+      p2 = 'Produção: Garantir idempotência com correlation IDs e deduplicação';
+      p3 = 'Trade-off: Ordem estrita por partição vs throughput horizontal';
+    } else if (lower.includes('banco') || lower.includes('sql') || lower.includes('postgres') || lower.includes('database')) {
+      p1 = 'Abordagem: Modelagem relacional com índices seletivos e particionamento';
+      p2 = 'Otimização: Evitar N+1, usar pooling de conexões e cache read-through';
+      p3 = 'Consistência: Níveis de isolamento ACID vs replicação eventual';
+    } else if (lower.includes('algoritmo') || lower.includes('complexidade') || lower.includes('dsa') || lower.includes('array')) {
+      p1 = 'Algoritmo: Identificar estrutura ótima para reduzir complexidade temporal';
+      p2 = 'Complexidade: Apontar tempo O(n) ou O(log n) e espaço auxiliar O(1)';
+      p3 = 'Edge cases: Tratar inputs vazios, limites de overflow e repetidos';
+    } else if (lower.includes('desafio') || lower.includes('conflito') || lower.includes('erro') || lower.includes('falha')) {
+      p1 = 'Situação: Apresentar o contexto com impacto de negócio sem culpar terceiros';
+      p2 = 'Ação: Liderar resolução com análise de causa-raiz e testes contínuos';
+      p3 = 'Resultado: Métrica de melhora obtida e aprendizado institucionalizado';
+    }
+
+    return {
+      points: [p1, p2, p3],
+      raw: `1. ${p1}\n2. ${p2}\n3. ${p3}`
+    };
+  }
+
 
   generateFallbackResponse(text, activeSkill) {
     logger.info('Generating fallback response', { activeSkill });

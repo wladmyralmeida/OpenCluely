@@ -95,7 +95,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   listDisplays: () => ipcRenderer.invoke('list-displays'),
   captureArea: (options) => ipcRenderer.invoke('capture-area', options),
 
-  // Call Transcripts
+  // Call Transcripts & Export
   getCallTranscripts: () => ipcRenderer.invoke('get-call-transcripts'),
   getCallTranscriptContent: (pathOrName) => ipcRenderer.invoke('get-call-transcript-content', pathOrName),
   openTranscriptsFolder: () => ipcRenderer.invoke('open-transcripts-folder'),
@@ -103,12 +103,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   deleteCallTranscript: (fileNameOrPath) => ipcRenderer.invoke('delete-call-transcript', fileNameOrPath),
   summarizeCallTranscript: (targetOrOptions) => ipcRenderer.invoke('summarize-call-transcript', targetOrOptions),
   getCallTranscriptSummary: (filePathOrName) => ipcRenderer.invoke('get-call-transcript-summary', filePathOrName),
+  exportCallTranscript: (options) => ipcRenderer.invoke('export-call-transcript', options),
+  generateSmartTalkingPoints: (text) => ipcRenderer.invoke('generate-smart-talking-points', text),
   setTranscriptionTranslation: (enabled) => ipcRenderer.invoke('set-transcription-translation', enabled),
   getTranscriptionTranslationStatus: () => ipcRenderer.invoke('get-transcription-translation-status'),
   
   // Event listeners
   onTranscriptionReceived: (callback) => ipcRenderer.on('transcription-received', callback),
   onInterimTranscription: (callback) => ipcRenderer.on('interim-transcription', callback),
+  onSmartTalkingPoints: (callback) => ipcRenderer.on('smart-talking-points', callback),
   onSpeechStatus: (callback) => ipcRenderer.on('speech-status', callback),
   onSpeechError: (callback) => ipcRenderer.on('speech-error', callback),
   onSpeechAvailability: (callback) => ipcRenderer.on('speech-availability', callback),

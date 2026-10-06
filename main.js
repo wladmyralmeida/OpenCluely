@@ -818,6 +818,100 @@ class ApplicationController {
       return { success: true, path: target };
     });
 
+    // 1-Click Meeting Export (PDF, Notion/Slack, Checklist, HTML)
+    ipcMain.handle("export-call-transcript", async (event, payload = {}) => {
+      const fileNameOrPath = typeof payload === "string" ? payload : (payload.fileNameOrPath || payload.fileName);
+      const format = (typeof payload === "object" && payload.format) ? payload.format.toLowerCase() : "notion";
+      const target = fileNameOrPath || transcriptLogger.getLastSessionFilePath();
+
+      if (!target) {
+        return { success: false, error: "Nenhuma transcrição encontrada para exportar." };
+      }
+
+      try {
+        if (format === "checklist") {
+          const result = transcriptLogger.extractActionItemsFromTranscript(target);
+          return { success: true, format: "checklist", content: result.checklistMarkdown, items: result.items };
+        }
+
+        if (format === "notion" || format === "slack") {
+          const content = transcriptLogger.generateNotionSlackTemplate(target);
+          return { success: true, format: "notion", content };
+        }
+
+        if (format === "html") {
+          const htmlContent = transcriptLogger.generateExecutiveHtmlReport(target);
+          const baseName = path.basename(target, ".txt").replace(/_summary$/, "");
+          const htmlPath = path.join(transcriptLogger.transcriptsDir, `${baseName}_executive_report.html`);
+          fs.writeFileSync(htmlPath, htmlContent, "utf8");
+          const { shell } = require("electron");
+          await shell.openPath(htmlPath);
+          return { success: true, format: "html", path: htmlPath, fileName: path.basename(htmlPath) };
+        }
+
+        if (format === "pdf") {
+          const htmlContent = transcriptLogger.generateExecutiveHtmlReport(target);
+          const baseName = path.basename(target, ".txt").replace(/_summary$/, "");
+          const pdfPath = path.join(transcriptLogger.transcriptsDir, `${baseName}_executive_report.pdf`);
+
+          // Render via hidden Electron BrowserWindow
+          let printWin = null;
+          try {
+            printWin = new BrowserWindow({
+              show: false,
+              width: 1024,
+              height: 768,
+              webPreferences: {
+                nodeIntegration: false,
+                contextIsolation: true
+              }
+            });
+
+            await printWin.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(htmlContent)}`);
+            await new Promise((r) => setTimeout(r, 250));
+
+            const pdfBuffer = await printWin.webContents.printToPDF({
+              printBackground: true,
+              pageSize: "A4",
+              margins: { top: 0.4, bottom: 0.4, left: 0.4, right: 0.4 }
+            });
+
+            fs.writeFileSync(pdfPath, pdfBuffer);
+            printWin.destroy();
+            printWin = null;
+
+            const { shell } = require("electron");
+            await shell.openPath(pdfPath);
+            return { success: true, format: "pdf", pdfPath, fileName: path.basename(pdfPath) };
+          } catch (pdfErr) {
+            if (printWin && !printWin.isDestroyed()) {
+              printWin.destroy();
+            }
+            logger.warn("Native printToPDF failed, falling back to executive HTML report", { error: pdfErr.message });
+            const htmlPath = path.join(transcriptLogger.transcriptsDir, `${baseName}_executive_report.html`);
+            fs.writeFileSync(htmlPath, htmlContent, "utf8");
+            const { shell } = require("electron");
+            await shell.openPath(htmlPath);
+            return { success: true, format: "html_fallback", path: htmlPath, fileName: path.basename(htmlPath), notice: "PDF exportado como relatório HTML." };
+          }
+        }
+
+        return { success: false, error: `Formato de exportação "${format}" não suportado.` };
+      } catch (err) {
+        logger.error("Failed to export call transcript", { error: err.message, target, format });
+        return { success: false, error: err.message };
+      }
+    });
+
+    // Smart Talking Points predictive intent handler
+    ipcMain.handle("generate-smart-talking-points", async (event, text) => {
+      try {
+        return await this.transcriptionController.generateSmartTalkingPoints(text);
+      } catch (err) {
+        return { points: [], error: err.message };
+      }
+    });
+
     // Transcription translation toggle handlers
     ipcMain.handle("set-transcription-translation", (event, enabled) => {
       return this.transcriptionController.setTranslationEnabled(enabled);

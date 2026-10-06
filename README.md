@@ -82,14 +82,32 @@ Real-time multi-modal AI reasoning, dual-source audio transcription, real-time b
 
 ---
 
-### 6. 🧠 Multimodal AI Reasoning (Google Gemini)
+### 6. 🚀 Sugestões Preditivas de Resposta em Tempo Real (Smart Talking Points)
+- **Zero Hesitação nas Respostas**: Enquanto o entrevistador formula uma pergunta, a IA detecta a intenção e gera **3 marcadores estratégicos de resposta rápida** em menos de 500ms na tela invisível (stealth overlay) e no chat.
+- **Estrutura Triangular de Alto Impacto**:
+  - `1. [Abordagem Direta]`: Posicionamento conceitual imediato para iniciar a fala nos primeiros 3 segundos.
+  - `2. [Exemplo Concreto / Arquitetura]`: Caso de uso prático, métricas e stack real do candidato.
+  - `3. [Trade-off / Diferencial]`: Ponto sênior de atenção, consistência vs escalabilidade e armadilhas evitadas.
+- **Pipeline Duplo Simultâneo**: Os 3 talking points aparecem no banner com destaque antes mesmo da resposta técnica completa terminar de ser transmitida token a token via streaming.
+
+---
+
+### 7. 📤 Exportador com 1-Clique (PDF Executivo, Notion, Slack & Checklist)
+- **Exportação Nativa em PDF**: Gera relatórios executivos diagramados em PDF vetorial via engine Chromium do Electron, prontos para impressão ou compartilhamento, com métricas, resumo, checklist e diálogo diarizado.
+- **Template para Notion / Slack**: Converte toda a ata em formato Markdown limpo e estilizado, pronto para colar diretamente em canais do Slack, Notion docs, Linear ou Obsidian.
+- **Checklist Interativa de Próximos Passos**: Extrai automaticamente compromissos e tarefas combinadas na reunião com sintaxe de checkboxes `- [ ]` com cópia em 1-clique.
+- **Comandos Rápidos no Chat**: Acesse instantaneamente via botões no modal ou comandos `/pdf`, `/notion`, `/checklist`, `/pontos <pergunta>`.
+
+---
+
+### 8. 🧠 Multimodal AI Reasoning (Google Gemini)
 - **Direct Visual Screen Reasoning (`Cmd/Ctrl + Shift + S`)**: Takes screen/region captures and streams them directly into Gemini for instant problem solving without lossy OCR steps.
 - **Low-Latency Streaming**: Token-by-token streaming response rendered in real-time.
 - **Rich Code & Math Rendering**: Full syntax highlighting via PrismJS and mathematical formula rendering (LaTeX/MathJax).
 
 ---
 
-### 7. 🎯 Specialized Skills & Dynamic Prompts
+### 9. 🎯 Specialized Skills & Dynamic Prompts
 - **Interview Skill**: Structured guidance, follow-up answers, behavioral tips, and system design insights.
 - **DSA Skill**: Optimal algorithms, $O(n)$ time/space complexity analysis, and implementation in C++, Python, Java, JavaScript, or C.
 - **Sales & Pitch Skill**: Objection handling, value propositions, and live negotiation assistance.

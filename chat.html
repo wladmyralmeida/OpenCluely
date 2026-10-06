@@ -373,6 +373,64 @@
         border: 1px solid rgba(255, 255, 255, 0.2);
       }
 
+      /* Smart Talking Points Card in Chat */
+      .message.talking-points-message {
+        background: linear-gradient(135deg, rgba(124, 77, 255, 0.18) 0%, rgba(0, 229, 255, 0.12) 100%);
+        border: 1px solid rgba(124, 77, 255, 0.4);
+        border-left: 4px solid #00e5ff;
+        border-radius: 8px;
+        padding: 10px 14px;
+        margin: 8px 0;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+        animation: fadeInSlide 0.15s ease-out;
+      }
+      .talking-points-card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 8px;
+      }
+      .talking-points-tag {
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        color: #00e5ff;
+        background: rgba(0, 229, 255, 0.15);
+        border: 1px solid rgba(0, 229, 255, 0.35);
+        padding: 2px 7px;
+        border-radius: 4px;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .talking-points-items-list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .talking-point-item-row {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        font-size: 12px;
+        line-height: 1.4;
+        color: rgba(255, 255, 255, 0.95);
+      }
+      .talking-point-item-badge {
+        font-size: 10px;
+        font-weight: 800;
+        color: #b388ff;
+        background: rgba(124, 77, 255, 0.25);
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+
       /* History Modal */
       .history-modal-overlay {
         position: fixed;
@@ -1263,6 +1321,9 @@
               <div class="preview-actions">
                 <button class="preview-action-btn primary" id="previewCopyBtn"><i class="fas fa-copy"></i> Copiar</button>
                 <button class="preview-action-btn" id="previewGenerateSummaryBtn"><i class="fas fa-magic"></i> Resumir com IA</button>
+                <button class="preview-action-btn" id="previewExportPdfBtn"><i class="fas fa-file-pdf"></i> Exportar PDF</button>
+                <button class="preview-action-btn" id="previewCopyNotionBtn"><i class="fas fa-clipboard-list"></i> Notion / Slack</button>
+                <button class="preview-action-btn" id="previewCopyChecklistBtn"><i class="fas fa-check-square"></i> Checklist</button>
                 <button class="preview-action-btn" id="previewOpenFileBtn"><i class="fas fa-external-link-alt"></i> Abrir Arquivo</button>
                 <button class="preview-action-btn danger" id="previewDeleteBtn"><i class="fas fa-trash-alt"></i> Excluir</button>
               </div>
@@ -1353,6 +1414,8 @@
                 addBilingualTranscription(item.originalText, item.translationPT, true, item.speaker);
               } else if (item.kind === 'meeting_summary') {
                 addMeetingSummaryMessage(item.summaryText, item.metadata || {}, true);
+              } else if (item.kind === 'smart_talking_points') {
+                addSmartTalkingPointsMessage(item.points, item.question || '', true);
               }
             });
           }
@@ -1555,7 +1618,64 @@
           }
         });
 
+        const pdfBtn = document.createElement('button');
+        pdfBtn.className = 'summary-action-btn';
+        pdfBtn.innerHTML = '<i class="fas fa-file-pdf"></i> Exportar PDF';
+        pdfBtn.addEventListener('click', async () => {
+          pdfBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gerando PDF...';
+          try {
+            if (whysperAPI && whysperAPI.exportCallTranscript) {
+              const res = await whysperAPI.exportCallTranscript({ fileNameOrPath: metadata.fileName, format: 'pdf' });
+              if (res && res.success) {
+                pdfBtn.innerHTML = '<i class="fas fa-check"></i> PDF Pronto!';
+              } else {
+                pdfBtn.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Falhou';
+              }
+            }
+          } catch (_) {
+            pdfBtn.innerHTML = '<i class="fas fa-file-pdf"></i> Exportar PDF';
+          }
+          setTimeout(() => { pdfBtn.innerHTML = '<i class="fas fa-file-pdf"></i> Exportar PDF'; }, 2500);
+        });
+
+        const notionBtn = document.createElement('button');
+        notionBtn.className = 'summary-action-btn';
+        notionBtn.innerHTML = '<i class="fas fa-clipboard-list"></i> Template Notion/Slack';
+        notionBtn.addEventListener('click', async () => {
+          try {
+            if (whysperAPI && whysperAPI.exportCallTranscript) {
+              const res = await whysperAPI.exportCallTranscript({ fileNameOrPath: metadata.fileName, format: 'notion' });
+              if (res && res.success && res.content) {
+                if (whysperAPI.copyToClipboard) await whysperAPI.copyToClipboard(res.content);
+                else navigator.clipboard.writeText(res.content);
+                notionBtn.innerHTML = '<i class="fas fa-check"></i> Template Copiado!';
+              }
+            }
+          } catch (_) {}
+          setTimeout(() => { notionBtn.innerHTML = '<i class="fas fa-clipboard-list"></i> Template Notion/Slack'; }, 2000);
+        });
+
+        const checklistBtn = document.createElement('button');
+        checklistBtn.className = 'summary-action-btn';
+        checklistBtn.innerHTML = '<i class="fas fa-check-square"></i> Copiar Checklist';
+        checklistBtn.addEventListener('click', async () => {
+          try {
+            if (whysperAPI && whysperAPI.exportCallTranscript) {
+              const res = await whysperAPI.exportCallTranscript({ fileNameOrPath: metadata.fileName, format: 'checklist' });
+              if (res && res.success && res.content) {
+                if (whysperAPI.copyToClipboard) await whysperAPI.copyToClipboard(res.content);
+                else navigator.clipboard.writeText(res.content);
+                checklistBtn.innerHTML = '<i class="fas fa-check"></i> Checklist Copiada!';
+              }
+            }
+          } catch (_) {}
+          setTimeout(() => { checklistBtn.innerHTML = '<i class="fas fa-check-square"></i> Copiar Checklist'; }, 2000);
+        });
+
         actionsDiv.appendChild(copyBtn);
+        actionsDiv.appendChild(pdfBtn);
+        actionsDiv.appendChild(notionBtn);
+        actionsDiv.appendChild(checklistBtn);
         actionsDiv.appendChild(folderBtn);
 
         messageDiv.appendChild(headerDiv);
@@ -1574,6 +1694,53 @@
               fileName: metadata.fileName,
               filePath: metadata.filePath
             }
+          });
+          saveHistory();
+        }
+      }
+
+      // Render predictive smart talking points card in chat
+      function addSmartTalkingPointsMessage(points, question = '', skipPersist = false) {
+        if (!chatMessages || !Array.isArray(points) || points.length === 0) return;
+
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'message talking-points-message';
+
+        const headerDiv = document.createElement('div');
+        headerDiv.className = 'talking-points-card-header';
+
+        const tagSpan = document.createElement('span');
+        tagSpan.className = 'talking-points-tag';
+        tagSpan.innerHTML = '<i class="fas fa-bolt"></i> SMART TALKING POINTS (RESPOSTA RÁPIDA)';
+
+        const timeSpan = document.createElement('span');
+        timeSpan.className = 'message-time';
+        timeSpan.textContent = new Date().toLocaleTimeString();
+
+        headerDiv.appendChild(tagSpan);
+        headerDiv.appendChild(timeSpan);
+
+        const listDiv = document.createElement('div');
+        listDiv.className = 'talking-points-items-list';
+
+        points.forEach((p, idx) => {
+          const row = document.createElement('div');
+          row.className = 'talking-point-item-row';
+          row.innerHTML = `<span class="talking-point-item-badge">${idx + 1}</span> <span>${escapeHtml(p)}</span>`;
+          listDiv.appendChild(row);
+        });
+
+        messageDiv.appendChild(headerDiv);
+        messageDiv.appendChild(listDiv);
+
+        chatMessages.appendChild(messageDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+
+        if (!skipPersist) {
+          chatHistory.push({
+            kind: 'smart_talking_points',
+            points,
+            question
           });
           saveHistory();
         }
@@ -2041,6 +2208,15 @@
           }
         });
 
+        // Listen for predictive smart talking points
+        if (whysperAPI.onSmartTalkingPoints) {
+          whysperAPI.onSmartTalkingPoints((event, data) => {
+            if (data && Array.isArray(data.points) && data.points.length > 0) {
+              addSmartTalkingPointsMessage(data.points, data.question || '');
+            }
+          });
+        }
+
         // Listen for speech status
         whysperAPI.onSpeechStatus((event, data) => {
           if (data && data.status) {
@@ -2202,8 +2378,7 @@
         const text = (rawText || '').trim();
         if (!text) return;
 
-        // Check for meeting summary commands
-        const lower = text.toLowerCase();
+        // Check for quick slash commands
         if (
           lower === '/resumo' ||
           lower === '/summary' ||
@@ -2216,6 +2391,97 @@
           messageInput.value = '';
           autoGrow(messageInput);
           triggerMeetingSummarization();
+          return;
+        }
+
+        if (lower === '/historico' || lower === '/history') {
+          addMessage(text, 'user');
+          messageInput.value = '';
+          autoGrow(messageInput);
+          openHistoryModal();
+          return;
+        }
+
+        if (lower === '/pdf' || lower === '/exportarpdf' || lower === '/exportar-pdf') {
+          addMessage(text, 'user');
+          messageInput.value = '';
+          autoGrow(messageInput);
+          addMessage('📄 Exportando relatório executivo em PDF...', 'system');
+          try {
+            if (whysperAPI && whysperAPI.exportCallTranscript) {
+              const res = await whysperAPI.exportCallTranscript({ format: 'pdf' });
+              if (res && res.success) {
+                addMessage(`✅ PDF exportado com sucesso: ${res.fileName}`, 'system');
+              } else {
+                addMessage(`⚠️ Falha ao exportar PDF: ${res?.error || 'Erro desconhecido'}`, 'error');
+              }
+            }
+          } catch (e) {
+            addMessage(`⚠️ Erro ao exportar PDF: ${e.message}`, 'error');
+          }
+          return;
+        }
+
+        if (lower === '/notion' || lower === '/slack') {
+          addMessage(text, 'user');
+          messageInput.value = '';
+          autoGrow(messageInput);
+          try {
+            if (whysperAPI && whysperAPI.exportCallTranscript) {
+              const res = await whysperAPI.exportCallTranscript({ format: 'notion' });
+              if (res && res.success && res.content) {
+                if (whysperAPI.copyToClipboard) await whysperAPI.copyToClipboard(res.content);
+                else navigator.clipboard.writeText(res.content);
+                addMessage('📋 Template Notion/Slack copiado para a área de transferência!', 'system');
+              }
+            }
+          } catch (e) {
+            addMessage(`⚠️ Erro ao gerar template: ${e.message}`, 'error');
+          }
+          return;
+        }
+
+        if (lower === '/checklist') {
+          addMessage(text, 'user');
+          messageInput.value = '';
+          autoGrow(messageInput);
+          try {
+            if (whysperAPI && whysperAPI.exportCallTranscript) {
+              const res = await whysperAPI.exportCallTranscript({ format: 'checklist' });
+              if (res && res.success && res.content) {
+                if (whysperAPI.copyToClipboard) await whysperAPI.copyToClipboard(res.content);
+                else navigator.clipboard.writeText(res.content);
+                addMessage('✅ Checklist de Ações copiada para a área de transferência!', 'system');
+              }
+            }
+          } catch (e) {
+            addMessage(`⚠️ Erro ao copiar checklist: ${e.message}`, 'error');
+          }
+          return;
+        }
+
+        if (lower.startsWith('/pontos') || lower.startsWith('/talkingpoints')) {
+          const query = text.replace(/^\/(?:pontos|talkingpoints)\s*/i, '').trim();
+          addMessage(text, 'user');
+          messageInput.value = '';
+          autoGrow(messageInput);
+          if (query) {
+            addMessage('⚡ Gerando Smart Talking Points...', 'system');
+            try {
+              if (whysperAPI && whysperAPI.generateSmartTalkingPoints) {
+                const res = await whysperAPI.generateSmartTalkingPoints(query);
+                if (res && res.points && res.points.length > 0) {
+                  addSmartTalkingPointsMessage(res.points, query);
+                } else {
+                  addMessage('Não foi possível gerar pontos para esta pergunta.', 'error');
+                }
+              }
+            } catch (err) {
+              addMessage(`Erro ao gerar pontos: ${err.message}`, 'error');
+            }
+          } else {
+            addMessage('Uso: /pontos <pergunta da entrevista>', 'system');
+          }
           return;
         }
 
@@ -2284,6 +2550,9 @@
       const previewBody = document.getElementById('previewBody');
       const previewCopyBtn = document.getElementById('previewCopyBtn');
       const previewGenerateSummaryBtn = document.getElementById('previewGenerateSummaryBtn');
+      const previewExportPdfBtn = document.getElementById('previewExportPdfBtn');
+      const previewCopyNotionBtn = document.getElementById('previewCopyNotionBtn');
+      const previewCopyChecklistBtn = document.getElementById('previewCopyChecklistBtn');
       const previewOpenFileBtn = document.getElementById('previewOpenFileBtn');
       const previewDeleteBtn = document.getElementById('previewDeleteBtn');
 
@@ -2691,6 +2960,65 @@
       }
       if (previewGenerateSummaryBtn) {
         previewGenerateSummaryBtn.addEventListener('click', triggerModalMeetingSummarization);
+      }
+      if (previewExportPdfBtn) {
+        previewExportPdfBtn.addEventListener('click', async () => {
+          if (!currentSelectedMeeting) return;
+          const origHtml = previewExportPdfBtn.innerHTML;
+          previewExportPdfBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gerando PDF...';
+          try {
+            if (whysperAPI && whysperAPI.exportCallTranscript) {
+              const res = await whysperAPI.exportCallTranscript({ fileNameOrPath: currentSelectedMeeting.name, format: 'pdf' });
+              if (res && res.success) {
+                previewExportPdfBtn.innerHTML = '<i class="fas fa-check"></i> PDF Pronto!';
+              } else {
+                alert('Erro ao exportar PDF: ' + (res?.error || 'Erro desconhecido'));
+              }
+            }
+          } catch (err) {
+            alert('Falha ao exportar PDF: ' + err.message);
+          } finally {
+            setTimeout(() => { previewExportPdfBtn.innerHTML = origHtml; }, 2500);
+          }
+        });
+      }
+      if (previewCopyNotionBtn) {
+        previewCopyNotionBtn.addEventListener('click', async () => {
+          if (!currentSelectedMeeting) return;
+          try {
+            if (whysperAPI && whysperAPI.exportCallTranscript) {
+              const res = await whysperAPI.exportCallTranscript({ fileNameOrPath: currentSelectedMeeting.name, format: 'notion' });
+              if (res && res.success && res.content) {
+                if (whysperAPI.copyToClipboard) await whysperAPI.copyToClipboard(res.content);
+                else navigator.clipboard.writeText(res.content);
+                const origHtml = previewCopyNotionBtn.innerHTML;
+                previewCopyNotionBtn.innerHTML = '<i class="fas fa-check"></i> Template Copiado!';
+                setTimeout(() => { previewCopyNotionBtn.innerHTML = origHtml; }, 2000);
+              }
+            }
+          } catch (err) {
+            alert('Falha ao exportar template: ' + err.message);
+          }
+        });
+      }
+      if (previewCopyChecklistBtn) {
+        previewCopyChecklistBtn.addEventListener('click', async () => {
+          if (!currentSelectedMeeting) return;
+          try {
+            if (whysperAPI && whysperAPI.exportCallTranscript) {
+              const res = await whysperAPI.exportCallTranscript({ fileNameOrPath: currentSelectedMeeting.name, format: 'checklist' });
+              if (res && res.success && res.content) {
+                if (whysperAPI.copyToClipboard) await whysperAPI.copyToClipboard(res.content);
+                else navigator.clipboard.writeText(res.content);
+                const origHtml = previewCopyChecklistBtn.innerHTML;
+                previewCopyChecklistBtn.innerHTML = '<i class="fas fa-check"></i> Checklist Copiada!';
+                setTimeout(() => { previewCopyChecklistBtn.innerHTML = origHtml; }, 2000);
+              }
+            }
+          } catch (err) {
+            alert('Falha ao copiar checklist: ' + err.message);
+          }
+        });
       }
       if (previewOpenFileBtn) {
         previewOpenFileBtn.addEventListener('click', () => {

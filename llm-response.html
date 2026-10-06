@@ -414,6 +414,70 @@
             background: rgba(76,175,80,0.85); 
             border-color: rgba(76,175,80,0.95); 
             transform: scale(0.98);
+        /* Smart Talking Points overlay card */
+        .talking-points-banner {
+            background: linear-gradient(135deg, rgba(124, 77, 255, 0.22) 0%, rgba(0, 229, 255, 0.16) 100%);
+            border: 1px solid rgba(124, 77, 255, 0.5);
+            border-left: 4px solid #00e5ff;
+            border-radius: 8px;
+            padding: 8px 12px;
+            margin: 6px 10px 10px 10px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+            animation: tpFadeIn 0.2s ease-out;
+        }
+        @keyframes tpFadeIn {
+            from { opacity: 0; transform: translateY(-6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .talking-points-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 6px;
+        }
+        .talking-points-badge {
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            color: #00e5ff;
+            background: rgba(0, 229, 255, 0.15);
+            border: 1px solid rgba(0, 229, 255, 0.35);
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+        .talking-points-hint {
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.6);
+        }
+        .talking-points-list {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            margin: 0;
+            padding: 0;
+        }
+        .talking-point-item {
+            display: flex;
+            align-items: baseline;
+            gap: 6px;
+            font-size: 12px;
+            line-height: 1.35;
+            color: #ffffff;
+            font-weight: 500;
+        }
+        .talking-point-num {
+            font-size: 10px;
+            font-weight: 800;
+            color: #b388ff;
+            background: rgba(124, 77, 255, 0.25);
+            width: 16px;
+            height: 16px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            flex-shrink: 0;
         }
     </style>
 </head>
@@ -441,6 +505,15 @@
 
         <!-- Response Content -->
         <div id="response-content" class="content-area hidden">
+            <!-- Smart Talking Points predictive banner -->
+            <div id="smart-talking-points-container" class="talking-points-banner hidden">
+                <div class="talking-points-header">
+                    <span class="talking-points-badge"><i class="fas fa-bolt"></i> SMART TALKING POINTS</span>
+                    <span class="talking-points-hint">Responda estes 3 pontos enquanto o detalhe carrega:</span>
+                </div>
+                <div id="talking-points-list" class="talking-points-list"></div>
+            </div>
+
             <!-- Split Layout -->
             <div id="split-layout" class="split-layout hidden">
                 <!-- Text Panel -->
@@ -508,6 +581,44 @@
                 const inner = document.querySelector('.full-content-inner');
                 if (inner) inner.scrollTop = inner.scrollHeight;
             }
+        }
+
+        function renderSmartTalkingPoints(data) {
+            const container = document.getElementById('smart-talking-points-container');
+            const list = document.getElementById('talking-points-list');
+            if (!container || !list) return;
+
+            const points = data && Array.isArray(data.points) ? data.points : [];
+            if (points.length === 0) {
+                container.classList.add('hidden');
+                return;
+            }
+
+            hideLoadingState();
+            const responseElement = document.getElementById('response-content');
+            if (responseElement) {
+                responseElement.classList.remove('hidden');
+                responseElement.dataset.hasResponse = 'true';
+            }
+
+            list.innerHTML = '';
+            points.forEach((p, idx) => {
+                const item = document.createElement('div');
+                item.className = 'talking-point-item';
+
+                const num = document.createElement('span');
+                num.className = 'talking-point-num';
+                num.textContent = String(idx + 1);
+
+                const textSpan = document.createElement('span');
+                textSpan.textContent = p;
+
+                item.appendChild(num);
+                item.appendChild(textSpan);
+                list.appendChild(item);
+            });
+
+            container.classList.remove('hidden');
         }
         
         // Immediate logging to verify script execution
@@ -616,6 +727,14 @@
                         if (data && data.messageId) {
                             appendStreaming(data.messageId, data.delta || '');
                         }
+                    });
+                }
+
+                // Listen for predictive Smart Talking Points (3-point quick response)
+                if (window.electronAPI.onSmartTalkingPoints) {
+                    window.electronAPI.onSmartTalkingPoints((event, data) => {
+                        console.log('[LLM-RESPONSE] smart-talking-points received:', data);
+                        renderSmartTalkingPoints(data);
                     });
                 }
 

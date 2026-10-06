@@ -38,15 +38,15 @@ class TranscriptionController {
   }
 
   get activeSkill() {
-    return this.appController.activeSkill;
+    return (this.appController && this.appController.activeSkill) || 'interview';
   }
 
   get codingLanguage() {
-    return this.appController.codingLanguage;
+    return (this.appController && this.appController.codingLanguage) || null;
   }
 
   get speechModeGeneration() {
-    return this.appController._speechModeGeneration;
+    return (this.appController && this.appController._speechModeGeneration) || 0;
   }
 
   _resolveSpeaker(speaker) {
@@ -228,6 +228,23 @@ class TranscriptionController {
       });
       if (this.shouldShowVoiceOverlay()) {
         this.windowManager.showLLMLoading();
+      }
+
+      // Concurrently generate predictive smart talking points (3 rapid strategic bullets)
+      if (this.activeSkill !== "transcript" && typeof this.llmService.generateSmartTalkingPoints === "function") {
+        this.llmService.generateSmartTalkingPoints(cleanText, responseSkill, sessionHistory.recent)
+          .then((tpResult) => {
+            if (!isCurrentMode() || !tpResult || !tpResult.points || tpResult.points.length === 0) return;
+            this.sendToVoiceResponseWindows("smart-talking-points", {
+              messageId,
+              question: cleanText,
+              points: tpResult.points,
+              skill: responseSkill
+            });
+          })
+          .catch((tpErr) => {
+            logger.debug("Smart talking points generation skipped", { error: tpErr.message });
+          });
       }
       const llmResult = await this.llmService.processTranscriptionWithIntelligentResponseStream(
         cleanText,
@@ -590,6 +607,13 @@ class TranscriptionController {
       isTranscriptionResponse: true
     };
     this.sendToVoiceResponseWindows("transcription-llm-response", data);
+  }
+
+  async generateSmartTalkingPoints(text) {
+    if (this.llmService && typeof this.llmService.generateSmartTalkingPoints === "function") {
+      return this.llmService.generateSmartTalkingPoints(text, this.activeSkill);
+    }
+    return { points: [], raw: "" };
   }
 }
 
