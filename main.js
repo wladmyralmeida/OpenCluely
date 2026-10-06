@@ -451,10 +451,33 @@ class ApplicationController {
       windowManager.handleRecordingStarted();
     });
 
-    speechService.on("recording-stopped", () => {
+    speechService.on("recording-stopped", async () => {
       const savedPath = transcriptLogger.endSession();
       if (savedPath) {
         windowManager.broadcastToAllWindows("transcript-saved", { path: savedPath });
+        windowManager.broadcastToAllWindows("meeting-ended", {
+          path: savedPath,
+          fileName: path.basename(savedPath),
+          hasTranscript: true
+        });
+
+        if (config.get('transcripts.autoSummarizeOnEnd', false)) {
+          try {
+            const content = transcriptLogger.getTranscriptContent(savedPath);
+            if (content) {
+              const summary = await llmService.summarizeMeetingTranscript(content);
+              const summaryPath = transcriptLogger.saveTranscriptSummary(savedPath, summary);
+              windowManager.broadcastToAllWindows("transcript-summary-ready", {
+                filePath: savedPath,
+                summary,
+                summaryPath,
+                fileName: path.basename(savedPath)
+              });
+            }
+          } catch (sumErr) {
+            console.error('Error auto-summarizing meeting transcript:', sumErr);
+          }
+        }
       }
       windowManager.handleRecordingStopped();
     });
@@ -723,6 +746,62 @@ class ApplicationController {
       const { shell } = require("electron");
       await shell.openPath(transcriptLogger.transcriptsDir);
       return { success: true, path: transcriptLogger.transcriptsDir };
+    });
+
+    ipcMain.handle("summarize-call-transcript", async (event, targetOrOptions) => {
+      try {
+        let targetPath = null;
+        if (typeof targetOrOptions === "string") {
+          targetPath = targetOrOptions;
+        } else if (targetOrOptions && typeof targetOrOptions === "object" && targetOrOptions.filePath) {
+          targetPath = targetOrOptions.filePath;
+        }
+
+        if (!targetPath) {
+          targetPath = transcriptLogger.getLastSessionFilePath();
+        }
+
+        if (!targetPath) {
+          return {
+            success: false,
+            error: "Nenhuma transcrição de reunião encontrada para resumir."
+          };
+        }
+
+        const content = transcriptLogger.getTranscriptContent(targetPath);
+        if (!content || !content.trim()) {
+          return {
+            success: false,
+            error: "Arquivo de transcrição vazio ou inacessível."
+          };
+        }
+
+        const summary = await llmService.summarizeMeetingTranscript(content);
+        const summaryPath = transcriptLogger.saveTranscriptSummary(targetPath, summary);
+
+        const result = {
+          success: true,
+          summary,
+          filePath: targetPath,
+          summaryPath,
+          fileName: path.basename(targetPath)
+        };
+
+        windowManager.broadcastToAllWindows("transcript-summary-ready", result);
+        return result;
+      } catch (err) {
+        console.error("Failed to summarize call transcript:", err);
+        return {
+          success: false,
+          error: err.message
+        };
+      }
+    });
+
+    ipcMain.handle("get-call-transcript-summary", (event, fileNameOrPath) => {
+      const target = fileNameOrPath || transcriptLogger.getLastSessionFilePath();
+      if (!target) return null;
+      return transcriptLogger.getTranscriptSummary(target);
     });
 
     // Transcription translation toggle handlers

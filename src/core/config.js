@@ -97,6 +97,12 @@ class ConfigManager {
         clearOnRestart: false
       },
 
+      transcripts: {
+        includeAIResponses: true,
+        autoSummarizeOnEnd: false,
+        summaryLanguage: 'pt-BR'
+      },
+
       stealth: {
         hideFromDock: true,
         noAttachConsole: true,

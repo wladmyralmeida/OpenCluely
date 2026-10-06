@@ -51,10 +51,17 @@ Real-time multi-modal AI reasoning, dual-source audio transcription, real-time b
 
 ---
 
-### 4. 📝 Automated Call Transcript Logging
-- **Real-Time Call Auto-Save**: Automatically logs every speech utterance and AI suggestion directly to readable, timestamped text files.
-- **Dedicated Storage**: Saved locally in `~/.OpenCluely/transcripts/call-transcript_YYYY-MM-DD_HH-mm-ss.txt`.
-- **Structured Reports**: Formatted with timestamps, speaker identifiers (`[SPEECH]`, `[AI ANSWER]`), session start/end metadata, and duration statistics.
+### 4. 📝 Automated Call Transcript Logging & AI Meeting Summarization
+- **Real-Time Call Auto-Save**: Automatically logs every speech utterance and AI suggestion directly to readable, timestamped text files in `~/.OpenCluely/transcripts/call-transcript_YYYY-MM-DD_HH-mm-ss.txt`.
+- **Executive Meeting Summary (Resumo da Reunião)**: Synthesizes the entire meeting transcript into a structured, high-impact executive summary:
+  - 🎯 **Visão Geral**: Concise 2-3 sentence overview of context and objectives.
+  - 💬 **Tópicos Principais**: Core discussion points structured cleanly with bullet points.
+  - ✅ **Decisões & Acordos**: Agreed decisions, consensus, and alignment.
+  - 🚀 **Próximos Passos & Ações**: Action items, assignees, and deadlines.
+  - 💡 **Destaques & Perguntas Relevantes**: Key takeaways and critical Q&A.
+- **1-Click & Command Triggers**: Access via the header `[Resumo]` button in Chat, the interactive post-call banner (`Reunião finalizada. [Resumir Reunião]`), or the `/resumo` / `/summary` chat commands.
+- **Dual Persistence**: Auto-saved as a companion Markdown file (`call-transcript_..._summary.md`) and appended to the `.txt` transcript file.
+- **Copy & Export**: One-click "Copiar Resumo" and direct folder access.
 
 ---
 
@@ -230,6 +237,7 @@ OpenCluely/
 ├── prompt-loader.js              # Prompt management & dynamic hot-reloading
 ├── prompts/                      # Customizable skills prompts (interview, dsa, sales, transcript)
 ├── scripts/                      # Test suites and diagnostic scripts
+│   ├── test-meeting-summary.js      # Meeting transcript summarization test suite
 │   ├── test-translation-feature.js  # Bilingual translation unit tests
 │   ├── test-call-transcript.js      # Transcript file auto-save test suite
 │   ├── test-worker-pool.js          # Whisper worker pool concurrency tests

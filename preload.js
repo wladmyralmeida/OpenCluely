@@ -99,6 +99,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getCallTranscripts: () => ipcRenderer.invoke('get-call-transcripts'),
   getCallTranscriptContent: (pathOrName) => ipcRenderer.invoke('get-call-transcript-content', pathOrName),
   openTranscriptsFolder: () => ipcRenderer.invoke('open-transcripts-folder'),
+  summarizeCallTranscript: (targetOrOptions) => ipcRenderer.invoke('summarize-call-transcript', targetOrOptions),
+  getCallTranscriptSummary: (filePathOrName) => ipcRenderer.invoke('get-call-transcript-summary', filePathOrName),
   setTranscriptionTranslation: (enabled) => ipcRenderer.invoke('set-transcription-translation', enabled),
   getTranscriptionTranslationStatus: () => ipcRenderer.invoke('get-transcription-translation-status'),
   
@@ -124,7 +126,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onInteractionModeChanged: (callback) => ipcRenderer.on('interaction-mode-changed', callback),
   onRecordingStarted: (callback) => ipcRenderer.on('recording-started', callback),
   onRecordingStopped: (callback) => ipcRenderer.on('recording-stopped', callback),
+  onMeetingEnded: (callback) => ipcRenderer.on('meeting-ended', callback),
   onTranscriptSaved: (callback) => ipcRenderer.on('transcript-saved', callback),
+  onTranscriptSummaryReady: (callback) => ipcRenderer.on('transcript-summary-ready', callback),
   onCodingLanguageChanged: (callback) => ipcRenderer.on('coding-language-changed', callback),
   onMainWindowShown: (callback) => ipcRenderer.on('main-window-shown', callback),
   

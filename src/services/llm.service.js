@@ -1454,8 +1454,9 @@ Remember: Be intelligent about filtering - provide quick, direct responses so th
   async translateToPortuguese(text) {
     if (!text || !text.trim()) return '';
     const cleanText = text.trim();
+    const apiKey = config.getApiKey('GEMINI');
 
-    if (!this.client || !this.apiKey) {
+    if (!this.client || !apiKey || apiKey === 'your-api-key-here') {
       return cleanText;
     }
 
@@ -1480,6 +1481,150 @@ Remember: Be intelligent about filtering - provide quick, direct responses so th
       return cleanText;
     }
   }
+
+  /**
+   * Generate an executive, structured summary of a meeting transcript
+   * @param {string} transcriptText - Full transcript text
+   * @param {object} options - Options (language, maxTokens, etc.)
+   * @returns {Promise<string>} Generated markdown summary
+   */
+  async summarizeMeetingTranscript(transcriptText, options = {}) {
+    if (!transcriptText || typeof transcriptText !== 'string' || !transcriptText.trim()) {
+      return 'Nenhuma transcrição foi fornecida para gerar o resumo da reunião.';
+    }
+
+    const cleanText = transcriptText.trim();
+    const utteranceMatches = cleanText.match(/\[.*?\]\s*\[(SPEAKER|AI ASSISTANT|USER)\]/gi) || [];
+    const textLength = cleanText.length;
+    
+    if (textLength < 30 && utteranceMatches.length === 0) {
+      return 'A transcrição da reunião está muito curta ou não contém falas gravadas suficientes para gerar um resumo.';
+    }
+
+    const apiKey = config.getApiKey('GEMINI');
+    if (!this.client || !apiKey || apiKey === 'your-api-key-here') {
+      return this._generateExtractiveMeetingSummaryFallback(cleanText);
+    }
+
+    // Cap transcript if excessively large to avoid payload overflow (~120,000 characters)
+    let processedTranscript = cleanText;
+    if (processedTranscript.length > 120000) {
+      const head = processedTranscript.substring(0, 60000);
+      const tail = processedTranscript.substring(processedTranscript.length - 60000);
+      processedTranscript = `${head}\n\n[... transcrição intermediária truncada para caber no limite do modelo ...]\n\n${tail}`;
+    }
+
+    const targetLang = options.language || config.get('transcripts.summaryLanguage', 'pt-BR');
+    const systemPrompt = `Você é um assistente executivo de alto nível, especialista em redigir atas e resumos executivos de reuniões de negócios, técnicas e alinhamentos de equipes.
+Seu objetivo é analisar a transcrição completa da reunião e sintetizar todas as discussões em um resumo conciso, claro e acionável em Português do Brasil (${targetLang}).
+
+Formato obrigatório da sua resposta (use exatamente esta estrutura em Markdown):
+
+# 📋 Resumo Executivo da Reunião
+
+## 🎯 Visão Geral & Contexto
+(2 a 3 frases sintetizando o propósito da reunião, os principais temas tratados e o resultado geral da conversa)
+
+## 💬 Tópicos Principais Abordados
+- **Tópico 1**: Detalhe conciso do que foi discutido
+- **Tópico 2**: Detalhe conciso do que foi discutido
+(inclua todos os tópicos relevantes)
+
+## ✅ Decisões & Alinhamentos
+- Decisões tomadas ou consensos estabelecidos (se não houver decisões explícitas, sintetize os alinhamentos ou conclusões)
+
+## 🚀 Próximos Passos & Ações (Action Items)
+- **[Ação]**: O que precisa ser feito, responsável e prazo (se mencionados na reunião)
+
+## 💡 Destaques & Pontos Relevantes
+- Perguntas essenciais respondidas, alertas ou pontos críticos mencionados
+
+Diretrizes estritas:
+- Seja objetivo e vá direto ao ponto, eliminando hesitações, ruídos, cumprimentos triviais e repetições.
+- Mantenha termos técnicos comuns da indústria no formato original quando apropriado (ex: PR, branch, deploy, sprint, backlog, deadline).
+- Não invente informações inexistentes na transcrição.`;
+
+    const userPrompt = `Abaixo está a transcrição completa da reunião gravada:\n\n---\n${processedTranscript}\n---\n\nGere agora o resumo executivo conciso e estruturado da reunião em Markdown conforme as instruções.`;
+
+    const geminiRequest = {
+      contents: [{
+        role: 'user',
+        parts: [{ text: userPrompt }]
+      }],
+      systemInstruction: {
+        role: 'system',
+        parts: [{ text: systemPrompt }]
+      },
+      generationConfig: this.getGenerationConfig({
+        temperature: 0.3,
+        maxOutputTokens: 2048,
+        topP: 0.95
+      })
+    };
+
+    try {
+      logger.info('Generating meeting summary via LLM', {
+        transcriptLength: cleanText.length,
+        utteranceCount: utteranceMatches.length
+      });
+
+      let summary;
+      try {
+        summary = await this.executeRequest(geminiRequest);
+      } catch (reqError) {
+        logger.warn('executeRequest failed for meeting summary, trying executeAlternativeRequest', { error: reqError.message });
+        summary = await this.executeAlternativeRequest(geminiRequest);
+      }
+
+      if (summary && summary.trim()) {
+        return summary.trim();
+      }
+      return this._generateExtractiveMeetingSummaryFallback(cleanText);
+    } catch (error) {
+      logger.error('Failed to generate meeting summary with LLM', { error: error.message });
+      return this._generateExtractiveMeetingSummaryFallback(cleanText, error.message);
+    }
+  }
+
+  /**
+   * Fallback extractive summary when Gemini is offline or unconfigured
+   */
+  _generateExtractiveMeetingSummaryFallback(transcriptText, errorMessage = null) {
+    const lines = transcriptText.split('\n').filter(l => l.trim().length > 0);
+    const speechLines = lines.filter(l => l.includes('[SPEAKER]') || l.includes('[USER]') || l.includes('[AI ASSISTANT]'));
+    
+    // Extract metadata
+    const dateLine = lines.find(l => l.includes('Session Date:')) || '';
+    const modeLine = lines.find(l => l.includes('Mode / Skill:')) || '';
+    const durationLine = lines.find(l => l.includes('Duration:')) || '';
+    const totalWordsLine = lines.find(l => l.includes('Total Words Spoken:')) || '';
+
+    const sampleLines = speechLines.slice(0, 10).map(l => {
+      const match = l.match(/\[.*?\]\s*\[(.*?)\]\s*(.*)/);
+      if (match) {
+        return `- **${match[1]}**: ${match[2]}`;
+      }
+      return `- ${l}`;
+    }).join('\n');
+
+    let fallback = `# 📋 Resumo da Reunião (Modo Estruturado Offline)
+
+${dateLine ? `> **Data**: ${dateLine.replace('Session Date:', '').trim()}\n` : ''}${durationLine ? `> **Duração**: ${durationLine.replace('Duration:', '').trim()}\n` : ''}${totalWordsLine ? `> **Palavras Registradas**: ${totalWordsLine.replace('Total Words Spoken:', '').trim()}\n` : ''}
+
+## 💬 Falas Registradas na Sessão (${speechLines.length} falas)
+${sampleLines || '_Nenhuma fala com identificador de participante encontrada na transcrição._'}
+${speechLines.length > 10 ? `\n_... e mais ${speechLines.length - 10} falas registradas no arquivo completo._` : ''}
+
+---
+💡 *Nota: Configure sua chave de API Gemini no OpenCluely para habilitar síntese executiva por IA completa com identificação automática de decisões e action items.*`;
+
+    if (errorMessage) {
+      fallback += `\n\n*(Aviso: Tentativa de síntese por IA retornou: ${errorMessage})*`;
+    }
+
+    return fallback;
+  }
+
 
   generateFallbackResponse(text, activeSkill) {
     logger.info('Generating fallback response', { activeSkill });

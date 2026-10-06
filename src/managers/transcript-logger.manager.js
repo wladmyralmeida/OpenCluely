@@ -11,6 +11,7 @@ class TranscriptLoggerManager {
     this.currentSkill = 'interview';
     this.entryCount = 0;
     this.wordCount = 0;
+    this.lastSessionFilePath = null;
     this.transcriptsDir = this._resolveTranscriptsDir();
     this._ensureDirExists();
   }
@@ -160,28 +161,104 @@ class TranscriptLoggerManager {
     }
 
     const savedFile = this.currentFilePath;
+    this.lastSessionFilePath = savedFile;
     this.currentFilePath = null;
     return savedFile;
   }
 
   /**
-   * Get list of all saved call transcript files
+   * Save a meeting summary to disk alongside the transcript file
+   * @param {string} fileNameOrPath - Target transcript file path or name
+   * @param {string} summaryText - Generated meeting summary (Markdown)
+   * @returns {string|null} Path to the saved summary markdown file
+   */
+  saveTranscriptSummary(fileNameOrPath, summaryText) {
+    if (!summaryText || !summaryText.trim()) return null;
+    this._ensureDirExists();
+
+    const targetPath = path.isAbsolute(fileNameOrPath)
+      ? fileNameOrPath
+      : path.join(this.transcriptsDir, fileNameOrPath);
+
+    const summaryPath = targetPath.endsWith('_summary.md')
+      ? targetPath
+      : targetPath.replace(/\.txt$/, '_summary.md');
+
+    try {
+      fs.writeFileSync(summaryPath, summaryText.trim() + '\n', 'utf8');
+      logger.info('Saved meeting transcript summary file', { summaryPath });
+
+      // Also append summary to original .txt transcript if it exists
+      if (fs.existsSync(targetPath) && targetPath.endsWith('.txt')) {
+        const existing = fs.readFileSync(targetPath, 'utf8');
+        const summaryHeader = '\n================================================================================\nMEETING SUMMARY (RESUMO DA REUNIÃO)\n================================================================================\n\n';
+        if (!existing.includes('MEETING SUMMARY (RESUMO DA REUNIÃO)')) {
+          fs.appendFileSync(targetPath, summaryHeader + summaryText.trim() + '\n\n', 'utf8');
+        }
+      }
+
+      return summaryPath;
+    } catch (err) {
+      logger.error('Failed to save meeting summary', { error: err.message, summaryPath });
+      return null;
+    }
+  }
+
+  /**
+   * Read meeting summary for a transcript file
+   * @param {string} fileNameOrPath - Transcript file name or path
+   * @returns {string|null} Summary text or null
+   */
+  getTranscriptSummary(fileNameOrPath) {
+    try {
+      const targetPath = path.isAbsolute(fileNameOrPath)
+        ? fileNameOrPath
+        : path.join(this.transcriptsDir, fileNameOrPath);
+
+      const summaryPath = targetPath.endsWith('_summary.md')
+        ? targetPath
+        : targetPath.replace(/\.txt$/, '_summary.md');
+
+      if (fs.existsSync(summaryPath)) {
+        return fs.readFileSync(summaryPath, 'utf8');
+      }
+
+      if (fs.existsSync(targetPath)) {
+        const content = fs.readFileSync(targetPath, 'utf8');
+        const marker = 'MEETING SUMMARY (RESUMO DA REUNIÃO)\n================================================================================\n\n';
+        const markerIdx = content.indexOf(marker);
+        if (markerIdx !== -1) {
+          return content.substring(markerIdx + marker.length).trim();
+        }
+      }
+    } catch (err) {
+      logger.error('Failed to read meeting summary', { error: err.message });
+    }
+    return null;
+  }
+
+  /**
+   * Get list of all saved call transcript files with summary metadata
    */
   listTranscripts() {
     this._ensureDirExists();
     try {
       const files = fs.readdirSync(this.transcriptsDir);
       return files
-        .filter(f => f.startsWith('call-transcript') && (f.endsWith('.txt') || f.endsWith('.md')))
+        .filter(f => f.startsWith('call-transcript') && f.endsWith('.txt'))
         .map(f => {
           const fullPath = path.join(this.transcriptsDir, f);
           const stat = fs.statSync(fullPath);
+          const summaryPath = path.join(this.transcriptsDir, f.replace(/\.txt$/, '_summary.md'));
+          const hasSummary = fs.existsSync(summaryPath);
           return {
             name: f,
             path: fullPath,
             sizeBytes: stat.size,
             createdAt: stat.birthtime || stat.mtime,
-            updatedAt: stat.mtime
+            updatedAt: stat.mtime,
+            hasSummary,
+            summaryPath: hasSummary ? summaryPath : null
           };
         })
         .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
@@ -214,6 +291,20 @@ class TranscriptLoggerManager {
    */
   getCurrentFilePath() {
     return this.currentFilePath;
+  }
+
+  /**
+   * Get path of the most recently finished or active session
+   */
+  getLastSessionFilePath() {
+    if (this.currentFilePath && fs.existsSync(this.currentFilePath)) {
+      return this.currentFilePath;
+    }
+    if (this.lastSessionFilePath && fs.existsSync(this.lastSessionFilePath)) {
+      return this.lastSessionFilePath;
+    }
+    const transcripts = this.listTranscripts();
+    return transcripts.length > 0 ? transcripts[0].path : null;
   }
 }
 
