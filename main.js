@@ -665,6 +665,14 @@ class ApplicationController {
       return sessionManager.getOptimizedHistory();
     });
 
+    ipcMain.handle("get-llm-session-history", () => {
+      return sessionManager.getOptimizedHistory();
+    });
+
+    ipcMain.handle("format-session-history", () => {
+      return sessionManager.getFormattedHistory ? sessionManager.getFormattedHistory() : sessionManager.getOptimizedHistory();
+    });
+
     ipcMain.handle("clear-session-memory", () => {
       sessionManager.clear();
       windowManager.broadcastToAllWindows("session-cleared");
@@ -989,6 +997,14 @@ class ApplicationController {
 
     ipcMain.handle("get-settings", () => {
       return this.getSettings();
+    });
+
+    ipcMain.handle("hide-settings", () => {
+      const settingsWindow = windowManager.getWindow("settings");
+      if (settingsWindow && !settingsWindow.isDestroyed()) {
+        settingsWindow.hide();
+      }
+      return { success: true };
     });
 
     // First-run onboarding status — renderer can query to know whether

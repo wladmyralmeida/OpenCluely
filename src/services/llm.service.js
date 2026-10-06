@@ -2071,4 +2071,7 @@ Regras de Ouro:
   }
 }
 
-module.exports = new LLMService();
+const llmServiceInstance = new LLMService();
+llmServiceInstance.LLMService = LLMService;
+module.exports = llmServiceInstance;
+

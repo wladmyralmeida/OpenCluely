@@ -96,7 +96,9 @@ class TranscriptionController {
     }
 
     // Route speech UI events according to the user's response-target setting.
-    this.sessionManager.addUserInput(`[${speaker}]: ${fragment}`, 'speech');
+    if (this.sessionManager && typeof this.sessionManager.addUserInput === 'function') {
+      this.sessionManager.addUserInput(`[${speaker}]: ${fragment}`, 'speech');
+    }
     const transcriptionOnly = this.activeSkill === "transcript";
     if (transcriptionOnly) {
       this.sendToChatWindow("transcription-received", {
@@ -137,7 +139,7 @@ class TranscriptionController {
 
     // Manual capture emits one complete transcript after the user presses stop,
     // so no debounce/coalescing delay is needed.
-    if (this.speechService.isManualCaptureMode()) {
+    if (this.speechService && typeof this.speechService.isManualCaptureMode === 'function' && this.speechService.isManualCaptureMode()) {
       this.dispatchCoalescedUtterance();
       return;
     }
@@ -617,4 +619,5 @@ class TranscriptionController {
   }
 }
 
+TranscriptionController.TranscriptionController = TranscriptionController;
 module.exports = TranscriptionController;

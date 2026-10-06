@@ -41,9 +41,12 @@ class TranscriptLoggerManager {
    * Start a new call transcript session file
    * @param {string} skill - Current active skill
    */
-  startSession(skill = 'interview') {
+  startSession(skillOrOptions = 'interview') {
     this._ensureDirExists();
-    this.currentSkill = skill;
+    const skillName = typeof skillOrOptions === 'string'
+      ? skillOrOptions
+      : (skillOrOptions?.skill || skillOrOptions?.mode || 'interview');
+    this.currentSkill = skillName;
     this.sessionStartTime = new Date();
     this.entryCount = 0;
     this.wordCount = 0;
@@ -63,7 +66,7 @@ class TranscriptLoggerManager {
       '================================================================================',
       `OpenCluely - Call Transcript`,
       `Session Date: ${this.sessionStartTime.toISOString().replace('T', ' ').substring(0, 19)}`,
-      `Mode / Skill: ${skill.toUpperCase()}`,
+      `Mode / Skill: ${skillName.toUpperCase()}`,
       '================================================================================\n\n'
     ].join('\n');
 
@@ -829,4 +832,7 @@ ${checklistMarkdown}
   }
 }
 
-module.exports = new TranscriptLoggerManager();
+const transcriptLoggerInstance = new TranscriptLoggerManager();
+transcriptLoggerInstance.TranscriptLoggerManager = TranscriptLoggerManager;
+module.exports = transcriptLoggerInstance;
+
