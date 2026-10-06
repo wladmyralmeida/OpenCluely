@@ -51,28 +51,45 @@ Real-time multi-modal AI reasoning, dual-source audio transcription, real-time b
 
 ---
 
-### 4. 📝 Automated Call Transcript Logging & AI Meeting Summarization
-- **Real-Time Call Auto-Save**: Automatically logs every speech utterance and AI suggestion directly to readable, timestamped text files in `~/.OpenCluely/transcripts/call-transcript_YYYY-MM-DD_HH-mm-ss.txt`.
-- **Executive Meeting Summary (Resumo da Reunião)**: Synthesizes the entire meeting transcript into a structured, high-impact executive summary:
-  - 🎯 **Visão Geral**: Concise 2-3 sentence overview of context and objectives.
-  - 💬 **Tópicos Principais**: Core discussion points structured cleanly with bullet points.
-  - ✅ **Decisões & Acordos**: Agreed decisions, consensus, and alignment.
-  - 🚀 **Próximos Passos & Ações**: Action items, assignees, and deadlines.
-  - 💡 **Destaques & Perguntas Relevantes**: Key takeaways and critical Q&A.
-- **1-Click & Command Triggers**: Access via the header `[Resumo]` button in Chat, the interactive post-call banner (`Reunião finalizada. [Resumir Reunião]`), or the `/resumo` / `/summary` chat commands.
-- **Dual Persistence**: Auto-saved as a companion Markdown file (`call-transcript_..._summary.md`) and appended to the `.txt` transcript file.
-- **Copy & Export**: One-click "Copiar Resumo" and direct folder access.
+### 4. 🎙️ Identificação de Locutores por Canal (Speaker Diarization: Você vs. Entrevistador)
+- **Separação Nativa por Hardware/Canal**: Identifica com precisão a origem de cada trecho de fala sem depender de modelos de diarização lentos na nuvem:
+  - 🎤 **Áudio do Microfone** $\rightarrow$ etiquetado em tempo real como `[VOCÊ]` (badge verde).
+  - 💻 **Áudio do Sistema / Loopback** $\rightarrow$ etiquetado em tempo real como `[ENTREVISTADOR]` (badge ciano).
+- **Segmentação Inteligente de Turnos**: Quando o interlocutor começa a falar enquanto o outro está ativo, o buffer de áudio é descarregado instantaneamente, separando perguntas e respostas de forma 100% fiel à dinâmica da conversa.
+- **Rastreabilidade Completa**: Tanto a janela de Chat quanto os arquivos de transcrição salvos registram a autoria exata de cada intervenção.
 
 ---
 
-### 5. 🧠 Multimodal AI Reasoning (Google Gemini)
+### 5. 📚 Gerenciador Visual de Reuniões Passadas & Resumos com IA
+- **Histórico & Busca Textual no App**: Modal integrado no topo do Chat (`[Histórico]`) com listagem completa de reuniões gravadas em `~/.OpenCluely/transcripts/`:
+  - 🔍 **Busca em Tempo Real**: Filtre instantaneamente por participante, tópico, palavra-chave, data ou modalidade.
+  - 🗂️ **Cards com Metadados Ricos**: Exibe duração (`⏱️`), contagem de falas e palavras (`📝`), badges dos locutores detectados (`VOCÊ`, `ENTREVISTADOR`) e status de resumo (`✨ Resumo Pronto` vs `📝 Transcrição`).
+  - 📖 **Painel de Pré-Visualização em 2 Abas**:
+    - **Resumo da Reunião**: Visualização executiva em Markdown rica com síntese dos tópicos, decisões e ações.
+    - **Transcrição Completa**: Visualização em formato de script de diálogo com badges coloridos para cada locutor.
+  - ⚡ **Ações Rápidas em 1 Clique**:
+    - `Copiar`: Copia resumo ou transcrição para a área de transferência.
+    - `Resumir com IA`: Gera ou regera a ata executiva sob demanda via Gemini.
+    - `Abrir Arquivo`: Abre o arquivo bruto `.txt` no editor padrão do SO.
+    - `Excluir`: Remove tanto o arquivo de transcrição quanto seu resumo associado com confirmação.
+- **Executive Meeting Summary (Resumo da Reunião)**:
+  - 🎯 **Visão Geral**: Contexto e objetivos essenciais da sessão.
+  - 💬 **Tópicos Principais**: Pontos de discussão estruturados em tópicos claros.
+  - ✅ **Decisões & Acordos**: Alinhamentos e decisões tomadas.
+  - 🚀 **Próximos Passos & Ações**: Lista de tarefas, responsáveis e prazos.
+  - 💡 **Destaques & Perguntas Relevantes**: Perguntas técnicas e respostas-chave.
+- **Gatilhos Múltiplos**: Botão `[Resumo]` no topo do chat, banner interativo pós-chamada (`Reunião finalizada. [Resumir Reunião]`), atalho `/resumo` / `/summary`, ou direto pelo Gerenciador de Histórico.
+
+---
+
+### 6. 🧠 Multimodal AI Reasoning (Google Gemini)
 - **Direct Visual Screen Reasoning (`Cmd/Ctrl + Shift + S`)**: Takes screen/region captures and streams them directly into Gemini for instant problem solving without lossy OCR steps.
 - **Low-Latency Streaming**: Token-by-token streaming response rendered in real-time.
 - **Rich Code & Math Rendering**: Full syntax highlighting via PrismJS and mathematical formula rendering (LaTeX/MathJax).
 
 ---
 
-### 6. 🎯 Specialized Skills & Dynamic Prompts
+### 7. 🎯 Specialized Skills & Dynamic Prompts
 - **Interview Skill**: Structured guidance, follow-up answers, behavioral tips, and system design insights.
 - **DSA Skill**: Optimal algorithms, $O(n)$ time/space complexity analysis, and implementation in C++, Python, Java, JavaScript, or C.
 - **Sales & Pitch Skill**: Objection handling, value propositions, and live negotiation assistance.
@@ -237,6 +254,7 @@ OpenCluely/
 ├── prompt-loader.js              # Prompt management & dynamic hot-reloading
 ├── prompts/                      # Customizable skills prompts (interview, dsa, sales, transcript)
 ├── scripts/                      # Test suites and diagnostic scripts
+│   ├── test-speaker-diarization-and-history.js # Speaker diarization & history manager tests
 │   ├── test-meeting-summary.js      # Meeting transcript summarization test suite
 │   ├── test-translation-feature.js  # Bilingual translation unit tests
 │   ├── test-call-transcript.js      # Transcript file auto-save test suite

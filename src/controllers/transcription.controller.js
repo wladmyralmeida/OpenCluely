@@ -49,17 +49,41 @@ class TranscriptionController {
     return this.appController._speechModeGeneration;
   }
 
+  _resolveSpeaker(speaker) {
+    if (!speaker) return 'VOCÊ';
+    const s = String(speaker).toUpperCase().trim();
+    if (s === 'SYSTEM' || s.includes('ENTREVISTADOR') || s.includes('INTERVIEWER') || s.includes('LOOPBACK')) {
+      return 'ENTREVISTADOR';
+    }
+    if (s === 'MIC' || s.includes('VOCÊ') || s.includes('VOCE') || s.includes('CANDIDATO') || s.includes('USER')) {
+      return 'VOCÊ';
+    }
+    return speaker;
+  }
+
   /**
    * Buffer a transcribed fragment and (re)arm the coalesce debounce.
+   * @param {string|object} textOrData - Utterance text or object { text, speaker, source }
+   * @param {string} [speakerArg] - Optional speaker identifier ('ENTREVISTADOR' | 'VOCÊ')
    */
-  async handleTranscriptionFragment(text) {
+  async handleTranscriptionFragment(textOrData, speakerArg = null) {
+    let text = textOrData;
+    let rawSpeaker = speakerArg;
+
+    if (typeof textOrData === 'object' && textOrData !== null) {
+      text = textOrData.text;
+      rawSpeaker = speakerArg || textOrData.speaker || (textOrData.source === 'system' ? 'ENTREVISTADOR' : 'VOCÊ');
+    }
+
     const fragment = (text || "").trim();
     if (!fragment) {
       return;
     }
 
-    // Save spoken speech to call transcript file
-    transcriptLogger.logSpeech(fragment, 'SPEAKER');
+    const speaker = this._resolveSpeaker(rawSpeaker);
+
+    // Save spoken speech to call transcript file with exact speaker tag
+    transcriptLogger.logSpeech(fragment, speaker);
 
     // Optional Portuguese translation
     let translationPT = null;
@@ -72,22 +96,24 @@ class TranscriptionController {
     }
 
     // Route speech UI events according to the user's response-target setting.
-    this.sessionManager.addUserInput(fragment, 'speech');
+    this.sessionManager.addUserInput(`[${speaker}]: ${fragment}`, 'speech');
     const transcriptionOnly = this.activeSkill === "transcript";
     if (transcriptionOnly) {
       this.sendToChatWindow("transcription-received", {
         text: fragment,
         translationPT,
-        transcriptionOnly: true
+        transcriptionOnly: true,
+        speaker
       });
       if (this.shouldShowVoiceOverlay()) {
         const displayText = translationPT
-          ? `**Original:** ${fragment}\n\n**Português:** ${translationPT}`
-          : fragment;
+          ? `**[${speaker}]** ${fragment}\n\n**Português:** ${translationPT}`
+          : `**[${speaker}]** ${fragment}`;
         this.windowManager.showLLMResponse(displayText, {
           skill: 'transcript',
           isTranscriptionOnly: true,
-          translationPT
+          translationPT,
+          speaker
         });
       }
       return;
@@ -95,12 +121,14 @@ class TranscriptionController {
     this.sendToVoiceResponseWindows("transcription-received", {
       text: fragment,
       translationPT,
-      transcriptionOnly: false
+      transcriptionOnly: false,
+      speaker
     });
 
     this.utteranceBuffer = this.utteranceBuffer
       ? `${this.utteranceBuffer} ${fragment}`
       : fragment;
+    this.lastUtteranceSpeaker = speaker;
 
     if (this.utteranceTimer) {
       clearTimeout(this.utteranceTimer);

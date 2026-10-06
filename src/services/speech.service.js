@@ -234,7 +234,7 @@ class SpeechService extends EventEmitter {
     this.recognizer.recognized = (s, e) => {
       try {
         if (e.result.reason === sdk.ResultReason.RecognizedSpeech && e.result.text && e.result.text.trim()) {
-          this.emit('transcription', e.result.text);
+          this.emit('transcription', e.result.text, 'VOCÊ');
         }
       } catch (error) {
         logger.error('Error in recognized handler', { error: error.message });
@@ -417,10 +417,12 @@ class SpeechService extends EventEmitter {
   }
 
   /**
-   * Receive raw 16kHz mono 16-bit PCM audio from the renderer and add it to
-   * the current Whisper segment buffer.
+   * Receive raw 16kHz mono 16-bit PCM audio from the renderer or loopback helper
+   * and add it to the current Whisper segment buffer with speaker source tracking.
+   * @param {Buffer|Uint8Array} chunk - Raw audio PCM buffer
+   * @param {'mic'|'system'} source - Audio origin ('mic' for candidate, 'system' for interviewer)
    */
-  handleAudioChunkFromRenderer(chunk) {
+  handleAudioChunkFromRenderer(chunk, source = 'mic') {
     if (!this.isRecording || this.provider !== 'whisper' || (!this.useRendererCapture && !this.usesSystemAudioCapture)) {
       return;
     }
@@ -428,7 +430,7 @@ class SpeechService extends EventEmitter {
       return;
     }
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-    this._ingestWhisperAudio(buffer);
+    this._ingestWhisperAudio(buffer, source);
   }
 
   /**
@@ -454,12 +456,13 @@ class SpeechService extends EventEmitter {
    * once a natural pause (trailing silence) is detected. Falls back to plain
    * buffering when VAD is disabled.
    */
-  _ingestWhisperAudio(buffer) {
+  _ingestWhisperAudio(buffer, source = 'mic') {
     if (!buffer || !buffer.length) {
       return;
     }
 
     if (this._isManualCaptureMode()) {
+      this.currentSegmentSource = source;
       this.segmentBuffers.push(buffer);
       this.segmentBytes += buffer.length;
       this.vadLastChunkAt = Date.now();
@@ -475,6 +478,7 @@ class SpeechService extends EventEmitter {
 
     if (!this._isVadEnabled()) {
       // Legacy behaviour: the watchdog/max-utterance cap drives flushing.
+      this.currentSegmentSource = source;
       this.segmentBuffers.push(buffer);
       this.segmentBytes += buffer.length;
       this.vadSpeaking = true;
@@ -505,7 +509,8 @@ class SpeechService extends EventEmitter {
 
     if (!this.vadSpeaking) {
       if (isVoiced) {
-        // Speech onset: prepend the pre-roll so the first syllable survives.
+        // Speech onset: record speaker source and prepend the pre-roll so the first syllable survives.
+        this.currentSegmentSource = source;
         this.vadSpeaking = true;
         this.vadSpeechMs = 0;
         this.vadSilenceMs = 0;
@@ -529,6 +534,18 @@ class SpeechService extends EventEmitter {
           this.vadPreRollMs -= this._chunkDurationMs(dropped);
         }
       }
+      return;
+    }
+
+    // If voiced audio arrives from the opposite source (e.g. interviewer begins speaking while candidate was speaking)
+    if (isVoiced && source !== this.currentSegmentSource && this.vadSpeechMs >= this._getMinUtteranceMs()) {
+      this._endUtteranceFlush();
+      this.currentSegmentSource = source;
+      this.vadSpeaking = true;
+      this.vadSpeechMs = chunkMs;
+      this.vadSilenceMs = 0;
+      this.segmentBuffers.push(buffer);
+      this.segmentBytes += buffer.length;
       return;
     }
 
@@ -1471,6 +1488,8 @@ class SpeechService extends EventEmitter {
   async _flushWhisperSegment({ final }) {
     if (this.segmentBytes) {
       const audioBuffer = Buffer.concat(this.segmentBuffers, this.segmentBytes);
+      const segmentSource = this.currentSegmentSource || 'mic';
+      const segmentSpeaker = segmentSource === 'system' ? 'ENTREVISTADOR' : 'VOCÊ';
       this.segmentBuffers = [];
       this.segmentBytes = 0;
 
@@ -1482,7 +1501,7 @@ class SpeechService extends EventEmitter {
         .then((transcript) => {
           const clean = (transcript || '').trim();
           if (clean && !this._isHallucinatedTranscript(clean)) {
-            this._resultQueue.push({ seq, text: clean });
+            this._resultQueue.push({ seq, text: clean, speaker: segmentSpeaker, source: segmentSource });
             this._drainResultQueue();
           } else {
             if (clean) {
@@ -1521,9 +1540,9 @@ class SpeechService extends EventEmitter {
       this._resultQueue.length > 0 &&
       this._resultQueue[0].seq === this._nextEmitSeq
     ) {
-      const { text } = this._resultQueue.shift();
+      const { text, speaker } = this._resultQueue.shift();
       this._nextEmitSeq++;
-      this.emit('transcription', text);
+      this.emit('transcription', text, speaker || 'VOCÊ');
     }
   }
 

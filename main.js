@@ -430,7 +430,7 @@ class ApplicationController {
   }
 
   setupServiceEventHandlers() {
-    systemAudioService.on("audio", (chunk) => speechService.handleAudioChunkFromRenderer(chunk));
+    systemAudioService.on("audio", (chunk) => speechService.handleAudioChunkFromRenderer(chunk, "system"));
     systemAudioService.on("status", (status) => logger.info("System audio helper", { status }));
     systemAudioService.on("error", (error) => {
       speechService.emit("error", error.message);
@@ -482,8 +482,8 @@ class ApplicationController {
       windowManager.handleRecordingStopped();
     });
 
-    speechService.on("transcription", (text) => {
-      this.handleTranscriptionFragment(text);
+    speechService.on("transcription", (text, speaker) => {
+      this.handleTranscriptionFragment(text, speaker);
     });
 
     speechService.on("interim-transcription", (text) => {
@@ -546,7 +546,7 @@ class ApplicationController {
     // Raw PCM audio captured by the renderer's Web Audio API (Windows Whisper path)
     ipcMain.on("audio-chunk", (_event, data) => {
       if (data && data.buffer) {
-        speechService.handleAudioChunkFromRenderer(Buffer.from(data.buffer));
+        speechService.handleAudioChunkFromRenderer(Buffer.from(data.buffer), "mic");
       }
     });
 
@@ -802,6 +802,20 @@ class ApplicationController {
       const target = fileNameOrPath || transcriptLogger.getLastSessionFilePath();
       if (!target) return null;
       return transcriptLogger.getTranscriptSummary(target);
+    });
+
+    ipcMain.handle("delete-call-transcript", (event, fileNameOrPath) => {
+      return transcriptLogger.deleteTranscript(fileNameOrPath);
+    });
+
+    ipcMain.handle("open-transcript-file", async (event, fileNameOrPath) => {
+      const pathModule = require("path");
+      const target = pathModule.isAbsolute(fileNameOrPath)
+        ? fileNameOrPath
+        : pathModule.join(transcriptLogger.transcriptsDir, fileNameOrPath);
+      const { shell } = require("electron");
+      await shell.openPath(target);
+      return { success: true, path: target };
     });
 
     // Transcription translation toggle handlers
@@ -1146,8 +1160,8 @@ class ApplicationController {
     return this.transcriptionController.processWithLLM(text, sessionHistory);
   }
 
-  handleTranscriptionFragment(text) {
-    return this.transcriptionController.handleTranscriptionFragment(text);
+  handleTranscriptionFragment(text, speaker) {
+    return this.transcriptionController.handleTranscriptionFragment(text, speaker);
   }
 
   dispatchCoalescedUtterance() {

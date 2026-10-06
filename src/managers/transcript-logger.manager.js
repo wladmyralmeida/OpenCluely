@@ -237,8 +237,45 @@ class TranscriptLoggerManager {
     return null;
   }
 
+  _extractTranscriptMetadata(content) {
+    if (!content) return {};
+    const skillMatch = content.match(/Mode \/ Skill:\s*([^\n\r]+)/i);
+    const dateMatch = content.match(/Session Date:\s*([^\n\r]+)/i);
+    const durationMatch = content.match(/Duration:\s*([^\n\r]+)/i);
+    const utterancesMatch = content.match(/Total Utterances Logged:\s*(\d+)/i);
+    const wordsMatch = content.match(/Total Words Spoken:\s*(\d+)/i);
+
+    // Detect speakers
+    const speakers = new Set();
+    const speakerMatches = content.match(/\[(VOCÊ|VOCE|ENTREVISTADOR|CANDIDATO|SPEAKER|AI ASSISTANT)\]/g) || [];
+    for (const sm of speakerMatches) {
+      const clean = sm.replace(/[\[\]]/g, '');
+      speakers.add(clean === 'VOCE' ? 'VOCÊ' : clean);
+    }
+
+    // Extract first spoken lines for preview
+    const spokenLines = [];
+    const lines = content.split('\n');
+    for (const l of lines) {
+      if (l.startsWith('[') && (l.includes('[SPEAKER]') || l.includes('[VOCÊ]') || l.includes('[ENTREVISTADOR]') || l.includes('[CANDIDATO]'))) {
+        spokenLines.push(l.trim());
+        if (spokenLines.length >= 2) break;
+      }
+    }
+
+    return {
+      skill: skillMatch ? skillMatch[1].trim() : 'INTERVIEW',
+      sessionDate: dateMatch ? dateMatch[1].trim() : null,
+      duration: durationMatch ? durationMatch[1].trim() : null,
+      utteranceCount: utterancesMatch ? parseInt(utterancesMatch[1], 10) : spokenLines.length,
+      wordCount: wordsMatch ? parseInt(wordsMatch[1], 10) : null,
+      speakers: Array.from(speakers),
+      preview: spokenLines.join(' • ')
+    };
+  }
+
   /**
-   * Get list of all saved call transcript files with summary metadata
+   * Get list of all saved call transcript files with rich summary and speaker metadata
    */
   listTranscripts() {
     this._ensureDirExists();
@@ -251,6 +288,19 @@ class TranscriptLoggerManager {
           const stat = fs.statSync(fullPath);
           const summaryPath = path.join(this.transcriptsDir, f.replace(/\.txt$/, '_summary.md'));
           const hasSummary = fs.existsSync(summaryPath);
+
+          let meta = {};
+          let summaryPreview = null;
+          try {
+            const txtSnippet = fs.readFileSync(fullPath, 'utf8');
+            meta = this._extractTranscriptMetadata(txtSnippet);
+
+            if (hasSummary) {
+              const sumContent = fs.readFileSync(summaryPath, 'utf8');
+              summaryPreview = sumContent.replace(/^#+.*?\n/gm, '').trim().substring(0, 180);
+            }
+          } catch (_) {}
+
           return {
             name: f,
             path: fullPath,
@@ -258,13 +308,42 @@ class TranscriptLoggerManager {
             createdAt: stat.birthtime || stat.mtime,
             updatedAt: stat.mtime,
             hasSummary,
-            summaryPath: hasSummary ? summaryPath : null
+            summaryPath: hasSummary ? summaryPath : null,
+            summaryPreview,
+            ...meta
           };
         })
         .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
     } catch (err) {
       logger.error('Failed to list transcripts', { error: err.message });
       return [];
+    }
+  }
+
+  /**
+   * Delete transcript file and associated summary file
+   * @param {string} fileNameOrPath
+   */
+  deleteTranscript(fileNameOrPath) {
+    try {
+      const targetPath = path.isAbsolute(fileNameOrPath)
+        ? fileNameOrPath
+        : path.join(this.transcriptsDir, fileNameOrPath);
+
+      const summaryPath = targetPath.replace(/\.txt$/, '_summary.md');
+
+      if (fs.existsSync(targetPath)) {
+        fs.unlinkSync(targetPath);
+      }
+      if (fs.existsSync(summaryPath)) {
+        fs.unlinkSync(summaryPath);
+      }
+
+      logger.info('Deleted transcript file and associated summary', { targetPath });
+      return { success: true, fileName: path.basename(targetPath) };
+    } catch (err) {
+      logger.error('Failed to delete transcript', { error: err.message });
+      return { success: false, error: err.message };
     }
   }
 

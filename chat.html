@@ -343,6 +343,325 @@
         opacity: 0.6;
         pointer-events: none;
       }
+
+      /* Speaker Badges */
+      .speaker-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        padding: 2px 7px;
+        border-radius: 4px;
+        margin-bottom: 5px;
+      }
+      .speaker-badge.interviewer {
+        background: rgba(0, 229, 255, 0.15);
+        color: #00e5ff;
+        border: 1px solid rgba(0, 229, 255, 0.35);
+      }
+      .speaker-badge.user {
+        background: rgba(0, 230, 118, 0.15);
+        color: #00e676;
+        border: 1px solid rgba(0, 230, 118, 0.35);
+      }
+      .speaker-badge.speaker {
+        background: rgba(255, 255, 255, 0.1);
+        color: rgba(255, 255, 255, 0.85);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+      }
+
+      /* History Modal */
+      .history-modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.75);
+        backdrop-filter: blur(8px);
+        z-index: 1000;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
+      .history-modal-overlay.active {
+        display: flex;
+      }
+      .history-modal-container {
+        background: #181824;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 12px;
+        width: 95vw;
+        max-width: 900px;
+        height: 85vh;
+        max-height: 680px;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+        overflow: hidden;
+      }
+      .history-modal-header {
+        padding: 14px 18px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: rgba(255, 255, 255, 0.02);
+      }
+      .modal-title-group .modal-title {
+        font-size: 15px;
+        font-weight: 700;
+        color: #fff;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .modal-title-group .modal-subtitle {
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.5);
+        margin-top: 2px;
+      }
+      .modal-header-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .modal-action-btn {
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        color: #fff;
+        border-radius: 5px;
+        padding: 5px 10px;
+        font-size: 11px;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .modal-action-btn:hover {
+        background: rgba(255, 255, 255, 0.15);
+      }
+      .modal-close-btn {
+        background: transparent;
+        border: none;
+        color: rgba(255, 255, 255, 0.6);
+        font-size: 24px;
+        line-height: 1;
+        cursor: pointer;
+        padding: 0 4px;
+      }
+      .modal-close-btn:hover {
+        color: #fff;
+      }
+      .history-toolbar {
+        padding: 10px 18px;
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        background: rgba(0, 0, 0, 0.2);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      }
+      .history-search-box {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 6px;
+        padding: 6px 12px;
+      }
+      .history-search-box input {
+        background: transparent;
+        border: none;
+        outline: none;
+        color: #fff;
+        font-size: 12px;
+        width: 100%;
+      }
+      .history-stats-pill {
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.6);
+        white-space: nowrap;
+      }
+      .history-modal-body {
+        flex: 1;
+        display: grid;
+        grid-template-columns: 320px 1fr;
+        overflow: hidden;
+      }
+      @media (max-width: 700px) {
+        .history-modal-body {
+          grid-template-columns: 1fr;
+        }
+      }
+      .history-cards-column {
+        border-right: 1px solid rgba(255, 255, 255, 0.08);
+        overflow-y: auto;
+        padding: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .history-meeting-card {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 8px;
+        padding: 10px 12px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
+      .history-meeting-card:hover {
+        background: rgba(255, 255, 255, 0.07);
+        border-color: rgba(124, 77, 255, 0.4);
+      }
+      .history-meeting-card.selected {
+        background: rgba(124, 77, 255, 0.14);
+        border-color: #7c4dff;
+      }
+      .card-top-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 5px;
+      }
+      .card-date {
+        font-size: 12px;
+        font-weight: 700;
+        color: #fff;
+      }
+      .card-summary-badge {
+        font-size: 10px;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-weight: 600;
+      }
+      .card-summary-badge.has-summary {
+        background: rgba(124, 77, 255, 0.25);
+        color: #b388ff;
+        border: 1px solid rgba(124, 77, 255, 0.4);
+      }
+      .card-summary-badge.no-summary {
+        background: rgba(255, 255, 255, 0.06);
+        color: rgba(255, 255, 255, 0.4);
+      }
+      .card-meta-row {
+        display: flex;
+        gap: 6px;
+        font-size: 10px;
+        color: rgba(255, 255, 255, 0.5);
+        margin-bottom: 6px;
+        flex-wrap: wrap;
+      }
+      .card-preview-text {
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.7);
+        line-height: 1.35;
+        overflow: hidden;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+      }
+      .history-preview-column {
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        background: rgba(0, 0, 0, 0.15);
+      }
+      .preview-empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        color: rgba(255, 255, 255, 0.4);
+        font-size: 12px;
+        padding: 20px;
+        text-align: center;
+      }
+      .preview-active-content {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        overflow: hidden;
+      }
+      .preview-header {
+        padding: 12px 18px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      }
+      .preview-title {
+        font-size: 14px;
+        font-weight: 700;
+        color: #fff;
+        margin-bottom: 4px;
+      }
+      .preview-meta-row {
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.5);
+        margin-bottom: 8px;
+        display: flex;
+        gap: 12px;
+      }
+      .preview-tabs {
+        display: flex;
+        gap: 8px;
+      }
+      .preview-tab-btn {
+        background: transparent;
+        border: none;
+        border-bottom: 2px solid transparent;
+        color: rgba(255, 255, 255, 0.6);
+        padding: 6px 12px;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .preview-tab-btn.active {
+        color: #b388ff;
+        border-bottom-color: #7c4dff;
+      }
+      .preview-body {
+        flex: 1;
+        overflow-y: auto;
+        padding: 16px 18px;
+        font-size: 13px;
+        line-height: 1.5;
+        color: rgba(255, 255, 255, 0.9);
+      }
+      .preview-actions {
+        padding: 10px 18px;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        display: flex;
+        gap: 8px;
+        background: rgba(255, 255, 255, 0.02);
+      }
+      .preview-action-btn {
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        color: #fff;
+        border-radius: 5px;
+        padding: 5px 10px;
+        font-size: 11px;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .preview-action-btn.primary {
+        background: #7c4dff;
+        border-color: #7c4dff;
+      }
+      .preview-action-btn.danger {
+        color: #ff5252;
+        border-color: rgba(255, 82, 82, 0.3);
+      }
+      .preview-action-btn.danger:hover {
+        background: rgba(255, 82, 82, 0.15);
+      }
       
       .message.assistant .message-text {
         /* Removed all height restrictions and overflow hidden */
@@ -859,6 +1178,9 @@
           <div class="recording-indicator" id="recordingIndicator"></div>
         </div>
         <div class="header-actions">
+          <button class="icon-button" id="transcriptsHistoryBtn" title="Histórico de Reuniões & Transcrições" style="font-size: 11px; padding: 4px 8px; display: inline-flex; align-items: center; gap: 4px;">
+            <i class="fas fa-history"></i> <span style="font-size: 10px; font-weight: 600;">Histórico</span>
+          </button>
           <button class="icon-button" id="summarizeMeetingBtn" title="Resumir Reunião (Gerar ata/resumo executivo da transcrição)" style="font-size: 11px; padding: 4px 8px; display: inline-flex; align-items: center; gap: 4px;">
             <i class="fas fa-file-invoice"></i> <span id="summarizeBtnLabel" style="font-size: 10px; font-weight: 600;">Resumo</span>
           </button>
@@ -890,6 +1212,62 @@
           <button class="send-button" id="sendButton">
             <i class="fas fa-paper-plane"></i>
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Meeting Transcripts History Modal -->
+    <div class="history-modal-overlay" id="historyModal">
+      <div class="history-modal-container">
+        <div class="history-modal-header">
+          <div class="modal-title-group">
+            <div class="modal-title"><i class="fas fa-history" style="color: #7c4dff;"></i> Histórico de Reuniões & Transcrições</div>
+            <div class="modal-subtitle">Transcrições e atas gravadas localmente em ~/.OpenCluely/transcripts</div>
+          </div>
+          <div class="modal-header-actions">
+            <button class="modal-action-btn" id="historyOpenFolderBtn" title="Abrir pasta no sistema"><i class="fas fa-folder-open"></i> Abrir Pasta</button>
+            <button class="modal-close-btn" id="closeHistoryModalBtn">&times;</button>
+          </div>
+        </div>
+
+        <div class="history-toolbar">
+          <div class="history-search-box">
+            <i class="fas fa-search"></i>
+            <input type="text" id="historySearchInput" placeholder="Buscar por palavra-chave, participante, data ou tópico..." />
+          </div>
+          <div class="history-stats-pill" id="historyStatsPill">0 reuniões salvas</div>
+        </div>
+
+        <div class="history-modal-body">
+          <!-- Left: List of meeting cards -->
+          <div class="history-cards-column" id="historyCardsContainer">
+            <div class="history-loading-indicator"><i class="fas fa-spinner fa-spin"></i> Carregando histórico...</div>
+          </div>
+
+          <!-- Right: Details & Preview Pane -->
+          <div class="history-preview-column" id="historyPreviewColumn">
+            <div class="preview-empty-state" id="previewEmptyState">
+              <i class="fas fa-file-alt" style="font-size: 32px; color: rgba(255, 255, 255, 0.2); margin-bottom: 10px;"></i>
+              <div>Selecione uma reunião para pré-visualizar o resumo e transcrição</div>
+            </div>
+            <div class="preview-active-content" id="previewActiveContent" style="display: none;">
+              <div class="preview-header">
+                <div class="preview-title" id="previewMeetingTitle">Reunião</div>
+                <div class="preview-meta-row" id="previewMetaRow"></div>
+                <div class="preview-tabs">
+                  <button class="preview-tab-btn active" id="tabSummaryBtn"><i class="fas fa-file-invoice"></i> Resumo da Reunião</button>
+                  <button class="preview-tab-btn" id="tabTranscriptBtn"><i class="fas fa-align-left"></i> Transcrição Completa</button>
+                </div>
+              </div>
+              <div class="preview-body" id="previewBody"></div>
+              <div class="preview-actions">
+                <button class="preview-action-btn primary" id="previewCopyBtn"><i class="fas fa-copy"></i> Copiar</button>
+                <button class="preview-action-btn" id="previewGenerateSummaryBtn"><i class="fas fa-magic"></i> Resumir com IA</button>
+                <button class="preview-action-btn" id="previewOpenFileBtn"><i class="fas fa-external-link-alt"></i> Abrir Arquivo</button>
+                <button class="preview-action-btn danger" id="previewDeleteBtn"><i class="fas fa-trash-alt"></i> Excluir</button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -968,11 +1346,11 @@
             // Render
             items.forEach(item => {
               if (item.kind === 'message') {
-                addMessage(item.text, item.type, true);
+                addMessage(item.text, item.type, true, item.speaker);
               } else if (item.kind === 'snippet') {
                 addCodeSnippet(item.language, item.code, true);
               } else if (item.kind === 'bilingual_transcription') {
-                addBilingualTranscription(item.originalText, item.translationPT, true);
+                addBilingualTranscription(item.originalText, item.translationPT, true, item.speaker);
               } else if (item.kind === 'meeting_summary') {
                 addMeetingSummaryMessage(item.summaryText, item.metadata || {}, true);
               }
@@ -1042,7 +1420,7 @@
       initSpeechAvailability();
 
       // Basic message function with markdown support for assistant messages
-      function addMessage(text, type = 'user', skipPersist = false) {
+      function addMessage(text, type = 'user', skipPersist = false, speaker = null) {
         if (!chatMessages) {
           console.error('Chat messages element not found!');
           return;
@@ -1051,9 +1429,32 @@
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${type}`;
 
+        const headerDiv = document.createElement('div');
+        headerDiv.style.display = 'flex';
+        headerDiv.style.justifyContent = 'space-between';
+        headerDiv.style.alignItems = 'center';
+        headerDiv.style.marginBottom = '4px';
+
+        const speakerLabel = speaker || (type === 'transcription' ? 'Áudio' : null);
+        if (speakerLabel && (type === 'transcription' || speaker)) {
+          const upper = speakerLabel.toUpperCase();
+          const isInterviewer = upper.includes('ENTREVISTADOR') || upper.includes('OUTROS') || upper.includes('SYSTEM');
+          const isUser = upper.includes('VOCÊ') || upper.includes('VOCE') || upper.includes('CANDIDATO');
+          const badgeClass = isInterviewer ? 'interviewer' : (isUser ? 'user' : 'speaker');
+          const badgeIcon = isInterviewer ? 'fa-user-tie' : (isUser ? 'fa-microphone' : 'fa-user');
+
+          const badgeSpan = document.createElement('span');
+          badgeSpan.className = `speaker-badge ${badgeClass}`;
+          badgeSpan.innerHTML = `<i class="fas ${badgeIcon}"></i> ${escapeHtml(speakerLabel)}`;
+          headerDiv.appendChild(badgeSpan);
+        } else {
+          headerDiv.appendChild(document.createElement('span'));
+        }
+
         const timeDiv = document.createElement('div');
         timeDiv.className = 'message-time';
         timeDiv.textContent = new Date().toLocaleTimeString();
+        headerDiv.appendChild(timeDiv);
 
         const textDiv = document.createElement('div');
         textDiv.className = 'message-text';
@@ -1066,14 +1467,14 @@
           textDiv.textContent = text;
         }
 
-        messageDiv.appendChild(timeDiv);
+        messageDiv.appendChild(headerDiv);
         messageDiv.appendChild(textDiv);
 
         chatMessages.appendChild(messageDiv);
         chatMessages.scrollTop = chatMessages.scrollHeight;
 
         if (!skipPersist) {
-          chatHistory.push({ kind: 'message', type, text });
+          chatHistory.push({ kind: 'message', type, text, speaker });
           saveHistory();
         }
       }
@@ -1359,17 +1760,17 @@
         addMessage('Stopped Listening', 'system');
       }
 
-      function handleTranscription(text, transcriptionOnly = false, translationPT = null) {
+      function handleTranscription(text, transcriptionOnly = false, translationPT = null, speaker = null) {
         if (text && typeof text === 'string' && text.trim().length > 0) {
           // Hide listening animation first
           hideListeningAnimation();
 
           // If translation is present, render side-by-side bilingual view
           if (translationPT && typeof translationPT === 'string' && translationPT.trim().length > 0) {
-            addBilingualTranscription(text.trim(), translationPT.trim());
+            addBilingualTranscription(text.trim(), translationPT.trim(), false, speaker);
           } else {
             // Render transcribed text immediately without delay
-            addMessage(text.trim(), 'transcription');
+            addMessage(text.trim(), 'transcription', false, speaker);
           }
           
           // Only show thinking indicator if this is an AI response mode
@@ -1381,15 +1782,34 @@
         }
       }
 
-      function addBilingualTranscription(originalText, translationPT, skipPersist = false) {
+      function addBilingualTranscription(originalText, translationPT, skipPersist = false, speaker = null) {
         if (!chatMessages) return;
 
         const messageDiv = document.createElement('div');
         messageDiv.className = 'message transcription transcription-bilingual';
 
+        const headerDiv = document.createElement('div');
+        headerDiv.style.display = 'flex';
+        headerDiv.style.justifyContent = 'space-between';
+        headerDiv.style.alignItems = 'center';
+        headerDiv.style.marginBottom = '6px';
+
+        const speakerLabel = speaker || 'Áudio';
+        const upper = speakerLabel.toUpperCase();
+        const isInterviewer = upper.includes('ENTREVISTADOR') || upper.includes('OUTROS') || upper.includes('SYSTEM');
+        const isUser = upper.includes('VOCÊ') || upper.includes('VOCE') || upper.includes('CANDIDATO');
+        const badgeClass = isInterviewer ? 'interviewer' : (isUser ? 'user' : 'speaker');
+        const badgeIcon = isInterviewer ? 'fa-user-tie' : (isUser ? 'fa-microphone' : 'fa-user');
+
+        const badgeSpan = document.createElement('span');
+        badgeSpan.className = `speaker-badge ${badgeClass}`;
+        badgeSpan.innerHTML = `<i class="fas ${badgeIcon}"></i> ${escapeHtml(speakerLabel)}`;
+        headerDiv.appendChild(badgeSpan);
+
         const timeDiv = document.createElement('div');
         timeDiv.className = 'message-time';
         timeDiv.textContent = new Date().toLocaleTimeString();
+        headerDiv.appendChild(timeDiv);
 
         const grid = document.createElement('div');
         grid.className = 'bilingual-grid';
@@ -1411,14 +1831,14 @@
         grid.appendChild(colOrig);
         grid.appendChild(colPT);
 
-        messageDiv.appendChild(timeDiv);
+        messageDiv.appendChild(headerDiv);
         messageDiv.appendChild(grid);
 
         chatMessages.appendChild(messageDiv);
         chatMessages.scrollTop = chatMessages.scrollHeight;
 
         if (!skipPersist) {
-          chatHistory.push({ kind: 'bilingual_transcription', originalText, translationPT });
+          chatHistory.push({ kind: 'bilingual_transcription', originalText, translationPT, speaker });
           saveHistory();
         }
       }
@@ -1609,7 +2029,7 @@
       if (whysperAPI) {
         whysperAPI.onTranscriptionReceived((event, data) => {
           if (data && data.text) {
-            handleTranscription(data.text, data.transcriptionOnly, data.translationPT);
+            handleTranscription(data.text, data.transcriptionOnly, data.translationPT, data.speaker);
           } else {
             console.warn('Invalid transcription data received:', data);
           }
@@ -1844,6 +2264,475 @@
           // If Shift+Enter, allow default to insert newline
         });
       }
+
+      // ==========================================
+      // Visual Meeting History Manager Controller
+      // ==========================================
+      const transcriptsHistoryBtn = document.getElementById('transcriptsHistoryBtn');
+      const historyModal = document.getElementById('historyModal');
+      const closeHistoryModalBtn = document.getElementById('closeHistoryModalBtn');
+      const historyOpenFolderBtn = document.getElementById('historyOpenFolderBtn');
+      const historySearchInput = document.getElementById('historySearchInput');
+      const historyStatsPill = document.getElementById('historyStatsPill');
+      const historyCardsContainer = document.getElementById('historyCardsContainer');
+      const previewEmptyState = document.getElementById('previewEmptyState');
+      const previewActiveContent = document.getElementById('previewActiveContent');
+      const previewMeetingTitle = document.getElementById('previewMeetingTitle');
+      const previewMetaRow = document.getElementById('previewMetaRow');
+      const tabSummaryBtn = document.getElementById('tabSummaryBtn');
+      const tabTranscriptBtn = document.getElementById('tabTranscriptBtn');
+      const previewBody = document.getElementById('previewBody');
+      const previewCopyBtn = document.getElementById('previewCopyBtn');
+      const previewGenerateSummaryBtn = document.getElementById('previewGenerateSummaryBtn');
+      const previewOpenFileBtn = document.getElementById('previewOpenFileBtn');
+      const previewDeleteBtn = document.getElementById('previewDeleteBtn');
+
+      let historyMeetings = [];
+      let currentSelectedMeeting = null;
+      let activePreviewTab = 'summary'; // 'summary' | 'transcript'
+      let currentMeetingTranscriptText = '';
+      let currentMeetingSummaryText = '';
+      let isSummarizingInModal = false;
+
+      function openHistoryModal() {
+        if (!historyModal) return;
+        historyModal.classList.add('active');
+        if (historySearchInput) {
+          historySearchInput.value = '';
+          historySearchInput.focus();
+        }
+        loadMeetingsHistory();
+      }
+
+      function closeHistoryModal() {
+        if (!historyModal) return;
+        historyModal.classList.remove('active');
+      }
+
+      async function loadMeetingsHistory() {
+        if (!historyCardsContainer) return;
+        historyCardsContainer.innerHTML = '<div class="history-loading-indicator" style="text-align: center; padding: 30px; color: rgba(255,255,255,0.5); font-size: 12px;"><i class="fas fa-spinner fa-spin"></i> Carregando reuniões...</div>';
+
+        try {
+          if (!whysperAPI || !whysperAPI.getCallTranscripts) {
+            historyCardsContainer.innerHTML = '<div style="padding: 20px; color: #ff5252; font-size: 12px;">Histórico não suportado nesta versão.</div>';
+            return;
+          }
+
+          const res = await whysperAPI.getCallTranscripts();
+          if (res && res.success && Array.isArray(res.transcripts)) {
+            historyMeetings = res.transcripts;
+          } else {
+            historyMeetings = [];
+          }
+
+          updateHistoryStats();
+          renderMeetingCards();
+
+          // If currentSelectedMeeting is still in list, keep it, else select first if available
+          if (currentSelectedMeeting) {
+            const found = historyMeetings.find(m => m.name === currentSelectedMeeting.name);
+            if (found) {
+              selectMeeting(found);
+            } else if (historyMeetings.length > 0) {
+              selectMeeting(historyMeetings[0]);
+            } else {
+              resetPreviewPane();
+            }
+          } else if (historyMeetings.length > 0) {
+            selectMeeting(historyMeetings[0]);
+          } else {
+            resetPreviewPane();
+          }
+        } catch (err) {
+          console.error('Falha ao carregar reuniões:', err);
+          historyCardsContainer.innerHTML = `<div style="padding: 20px; color: #ff5252; font-size: 12px;">Erro ao carregar: ${escapeHtml(err.message)}</div>`;
+        }
+      }
+
+      function updateHistoryStats() {
+        if (!historyStatsPill) return;
+        const total = historyMeetings.length;
+        const summarized = historyMeetings.filter(m => m.hasSummary).length;
+        historyStatsPill.textContent = `${total} ${total === 1 ? 'reunião' : 'reuniões'} • ${summarized} ${summarized === 1 ? 'resumo' : 'resumos'}`;
+      }
+
+      function renderMeetingCards() {
+        if (!historyCardsContainer) return;
+        const query = (historySearchInput ? historySearchInput.value : '').trim().toLowerCase();
+
+        const filtered = historyMeetings.filter(m => {
+          if (!query) return true;
+          const searchHaystack = [
+            m.name || '',
+            m.skill || '',
+            m.sessionDate || '',
+            m.preview || '',
+            m.summaryPreview || '',
+            (m.speakers || []).join(' ')
+          ].join(' ').toLowerCase();
+          return searchHaystack.includes(query);
+        });
+
+        if (filtered.length === 0) {
+          historyCardsContainer.innerHTML = `
+            <div style="text-align: center; padding: 40px 15px; color: rgba(255,255,255,0.4); font-size: 12px;">
+              <i class="fas fa-search" style="font-size: 24px; margin-bottom: 8px; opacity: 0.5;"></i>
+              <div>${query ? 'Nenhuma reunião encontrada para a busca.' : 'Nenhuma reunião gravada ainda.'}</div>
+            </div>
+          `;
+          return;
+        }
+
+        historyCardsContainer.innerHTML = '';
+        filtered.forEach(meeting => {
+          const card = document.createElement('div');
+          const isSelected = currentSelectedMeeting && currentSelectedMeeting.name === meeting.name;
+          card.className = `history-meeting-card ${isSelected ? 'selected' : ''}`;
+          card.dataset.name = meeting.name;
+
+          // Format date or display name
+          const dateStr = meeting.sessionDate || meeting.name.replace(/transcript_|call_/i, '').replace(/\.txt$/i, '');
+          const durationStr = meeting.duration ? `⏱️ ${escapeHtml(meeting.duration)}` : '';
+          const wordCountStr = meeting.wordCount ? `📝 ${meeting.wordCount} palavras` : (meeting.utteranceCount ? `💬 ${meeting.utteranceCount} falas` : '');
+          
+          // Speaker tags
+          const speakersHtml = (meeting.speakers || []).map(sp => {
+            const isInterviewer = sp.includes('ENTREVISTADOR') || sp.includes('OUTROS');
+            const isUser = sp.includes('VOCÊ') || sp.includes('VOCE') || sp.includes('CANDIDATO');
+            const cls = isInterviewer ? 'interviewer' : (isUser ? 'user' : 'speaker');
+            return `<span class="speaker-badge ${cls}" style="font-size: 8px; padding: 1px 4px; margin: 0;">${escapeHtml(sp)}</span>`;
+          }).join(' ');
+
+          const summaryBadgeHtml = meeting.hasSummary
+            ? '<span class="card-summary-badge has-summary"><i class="fas fa-file-invoice"></i> Resumo</span>'
+            : '<span class="card-summary-badge no-summary">Sem resumo</span>';
+
+          const previewSnippet = meeting.summaryPreview || meeting.preview || 'Sem pré-visualização de texto';
+
+          card.innerHTML = `
+            <div class="card-top-row">
+              <span class="card-date">${escapeHtml(dateStr)}</span>
+              ${summaryBadgeHtml}
+            </div>
+            <div class="card-meta-row">
+              ${meeting.skill ? `<span style="text-transform: uppercase; font-weight: 700; color: #b388ff;">[${escapeHtml(meeting.skill)}]</span>` : ''}
+              ${durationStr ? `<span>${durationStr}</span>` : ''}
+              ${wordCountStr ? `<span>${wordCountStr}</span>` : ''}
+            </div>
+            ${speakersHtml ? `<div style="display: flex; gap: 4px; margin-bottom: 6px; flex-wrap: wrap;">${speakersHtml}</div>` : ''}
+            <div class="card-preview-text">${escapeHtml(previewSnippet)}</div>
+          `;
+
+          card.addEventListener('click', () => {
+            selectMeeting(meeting);
+          });
+
+          historyCardsContainer.appendChild(card);
+        });
+      }
+
+      function resetPreviewPane() {
+        currentSelectedMeeting = null;
+        currentMeetingTranscriptText = '';
+        currentMeetingSummaryText = '';
+        if (previewEmptyState) previewEmptyState.style.display = 'flex';
+        if (previewActiveContent) previewActiveContent.style.display = 'none';
+      }
+
+      async function selectMeeting(meeting) {
+        currentSelectedMeeting = meeting;
+
+        // Highlight selected card
+        if (historyCardsContainer) {
+          const cards = historyCardsContainer.querySelectorAll('.history-meeting-card');
+          cards.forEach(c => {
+            c.classList.toggle('selected', c.dataset.name === meeting.name);
+          });
+        }
+
+        if (previewEmptyState) previewEmptyState.style.display = 'none';
+        if (previewActiveContent) previewActiveContent.style.display = 'flex';
+
+        // Title & metadata
+        if (previewMeetingTitle) {
+          previewMeetingTitle.textContent = meeting.sessionDate || meeting.name;
+        }
+
+        if (previewMetaRow) {
+          const parts = [];
+          if (meeting.skill) parts.push(`<strong>Skill:</strong> ${escapeHtml(meeting.skill)}`);
+          if (meeting.duration) parts.push(`<strong>Duração:</strong> ${escapeHtml(meeting.duration)}`);
+          if (meeting.utteranceCount) parts.push(`<strong>Falas:</strong> ${meeting.utteranceCount}`);
+          if (meeting.wordCount) parts.push(`<strong>Palavras:</strong> ${meeting.wordCount}`);
+          if (meeting.speakers && meeting.speakers.length > 0) parts.push(`<strong>Locutores:</strong> ${meeting.speakers.join(', ')}`);
+          previewMetaRow.innerHTML = parts.join(' &nbsp;•&nbsp; ');
+        }
+
+        // Update button state for summary
+        updateSummaryBtnState(meeting.hasSummary);
+
+        // Fetch contents
+        if (previewBody) {
+          previewBody.innerHTML = '<div style="text-align: center; padding: 40px; color: rgba(255,255,255,0.4);"><i class="fas fa-spinner fa-spin"></i> Carregando conteúdo...</div>';
+        }
+
+        try {
+          const [transcriptRes, summaryRes] = await Promise.all([
+            whysperAPI.getCallTranscriptContent(meeting.name),
+            whysperAPI.getCallTranscriptSummary(meeting.name)
+          ]);
+
+          currentMeetingTranscriptText = (transcriptRes && transcriptRes.success) ? transcriptRes.content : '';
+          currentMeetingSummaryText = (summaryRes && summaryRes.success) ? summaryRes.summary : '';
+
+          // If summary exists, show summary tab by default, otherwise show transcript tab
+          if (currentMeetingSummaryText && currentMeetingSummaryText.trim()) {
+            meeting.hasSummary = true;
+            setActivePreviewTab('summary');
+          } else {
+            meeting.hasSummary = false;
+            setActivePreviewTab('transcript');
+          }
+          updateSummaryBtnState(meeting.hasSummary);
+        } catch (err) {
+          if (previewBody) {
+            previewBody.innerHTML = `<div style="color: #ff5252; padding: 20px;">Erro ao carregar conteúdo: ${escapeHtml(err.message)}</div>`;
+          }
+        }
+      }
+
+      function updateSummaryBtnState(hasSummary) {
+        if (!previewGenerateSummaryBtn) return;
+        if (isSummarizingInModal) {
+          previewGenerateSummaryBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Resumindo...';
+          previewGenerateSummaryBtn.disabled = true;
+        } else {
+          previewGenerateSummaryBtn.disabled = false;
+          previewGenerateSummaryBtn.innerHTML = hasSummary
+            ? '<i class="fas fa-sync-alt"></i> Re-resumir com IA'
+            : '<i class="fas fa-magic"></i> Resumir com IA';
+        }
+      }
+
+      function setActivePreviewTab(tab) {
+        activePreviewTab = tab;
+        if (tabSummaryBtn) tabSummaryBtn.classList.toggle('active', tab === 'summary');
+        if (tabTranscriptBtn) tabTranscriptBtn.classList.toggle('active', tab === 'transcript');
+        renderActivePreviewBody();
+      }
+
+      function renderActivePreviewBody() {
+        if (!previewBody) return;
+
+        if (activePreviewTab === 'summary') {
+          if (currentMeetingSummaryText && currentMeetingSummaryText.trim()) {
+            previewBody.innerHTML = formatMarkdown(currentMeetingSummaryText);
+            if (window.renderMathInElement) window.renderMathInElement(previewBody);
+          } else {
+            previewBody.innerHTML = `
+              <div style="text-align: center; padding: 50px 20px; color: rgba(255, 255, 255, 0.5);">
+                <i class="fas fa-file-invoice" style="font-size: 36px; color: #7c4dff; opacity: 0.8; margin-bottom: 14px; display: block;"></i>
+                <div style="font-size: 14px; font-weight: 600; color: #fff; margin-bottom: 6px;">Nenhum resumo gerado ainda</div>
+                <div style="font-size: 12px; margin-bottom: 18px; max-width: 400px; margin-left: auto; margin-right: auto;">
+                  Esta reunião possui a transcrição salva. Clique no botão abaixo para gerar uma ata executiva detalhada com perguntas, respostas e itens de ação.
+                </div>
+                <button class="preview-action-btn primary" id="emptyGenerateSummaryBtn" style="font-size: 12px; padding: 8px 16px;">
+                  <i class="fas fa-magic"></i> Gerar Resumo Agora com IA
+                </button>
+              </div>
+            `;
+            const emptyBtn = document.getElementById('emptyGenerateSummaryBtn');
+            if (emptyBtn) {
+              emptyBtn.addEventListener('click', () => {
+                triggerModalMeetingSummarization();
+              });
+            }
+          }
+        } else {
+          // Render transcript with dialog speaker tags
+          if (!currentMeetingTranscriptText || !currentMeetingTranscriptText.trim()) {
+            previewBody.innerHTML = '<div style="color: rgba(255,255,255,0.4); text-align: center; padding: 40px;">Transcrição vazia.</div>';
+            return;
+          }
+
+          const lines = currentMeetingTranscriptText.split('\n');
+          const renderedLines = [];
+          let isHeaderSection = true;
+          const headerLines = [];
+
+          for (const rawLine of lines) {
+            const line = rawLine.trim();
+            if (!line) continue;
+
+            if (line.startsWith('===') || line.startsWith('OPENCLUELY') || line.startsWith('Session Date:') || line.startsWith('Mode / Skill:') || line.startsWith('Total Utterances') || line.startsWith('Duration:') || line.startsWith('Total Words')) {
+              headerLines.push(line);
+              continue;
+            }
+
+            // Spoken utterance turn: [HH:MM:SS] [SPEAKER] Text
+            const turnMatch = line.match(/^\[(\d{2}:\d{2}:\d{2})\]\s*\[(.*?)\]\s*(.*)$/);
+            if (turnMatch) {
+              const [, time, speaker, spokenText] = turnMatch;
+              const upperSp = speaker.toUpperCase();
+              const isInterviewer = upperSp.includes('ENTREVISTADOR') || upperSp.includes('OUTROS');
+              const isUser = upperSp.includes('VOCÊ') || upperSp.includes('VOCE') || upperSp.includes('CANDIDATO');
+              const badgeClass = isInterviewer ? 'interviewer' : (isUser ? 'user' : 'speaker');
+              const badgeIcon = isInterviewer ? 'fa-user-tie' : (isUser ? 'fa-microphone' : 'fa-user');
+
+              renderedLines.push(`
+                <div style="margin-bottom: 12px; background: rgba(255,255,255,0.02); border-left: 3px solid ${isInterviewer ? '#00e5ff' : (isUser ? '#00e676' : 'rgba(255,255,255,0.2)')}; padding: 8px 12px; border-radius: 4px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                    <span class="speaker-badge ${badgeClass}"><i class="fas ${badgeIcon}"></i> ${escapeHtml(speaker)}</span>
+                    <span style="font-size: 10px; color: rgba(255,255,255,0.4);">${escapeHtml(time)}</span>
+                  </div>
+                  <div style="font-size: 13px; color: rgba(255,255,255,0.9); line-height: 1.45; white-space: pre-wrap;">${escapeHtml(spokenText)}</div>
+                </div>
+              `);
+            } else {
+              renderedLines.push(`<div style="font-size: 12px; color: rgba(255,255,255,0.7); margin-bottom: 6px;">${escapeHtml(line)}</div>`);
+            }
+          }
+
+          const headerHtml = headerLines.length > 0
+            ? `<div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 10px 14px; font-family: monospace; font-size: 11px; color: rgba(255,255,255,0.5); margin-bottom: 16px; white-space: pre-wrap;">${escapeHtml(headerLines.join('\n'))}</div>`
+            : '';
+
+          previewBody.innerHTML = headerHtml + renderedLines.join('');
+        }
+      }
+
+      async function triggerModalMeetingSummarization() {
+        if (!currentSelectedMeeting || isSummarizingInModal) return;
+        isSummarizingInModal = true;
+        updateSummaryBtnState(currentSelectedMeeting.hasSummary);
+
+        if (previewBody) {
+          previewBody.innerHTML = `
+            <div style="text-align: center; padding: 60px 20px; color: rgba(255, 255, 255, 0.7);">
+              <i class="fas fa-spinner fa-spin" style="font-size: 36px; color: #7c4dff; margin-bottom: 14px; display: block;"></i>
+              <div style="font-size: 14px; font-weight: 600; color: #fff;">Resumindo reunião com IA (Gemini)...</div>
+              <div style="font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 6px;">Isso pode levar alguns segundos dependendo da duração da conversa.</div>
+            </div>
+          `;
+        }
+
+        try {
+          const res = await whysperAPI.summarizeCallTranscript(currentSelectedMeeting.name);
+          if (res && res.success && res.summary) {
+            currentMeetingSummaryText = res.summary;
+            currentSelectedMeeting.hasSummary = true;
+            currentSelectedMeeting.summaryPreview = res.summary.substring(0, 180);
+            updateHistoryStats();
+            renderMeetingCards();
+            setActivePreviewTab('summary');
+          } else {
+            alert('Falha ao gerar resumo: ' + (res?.error || 'Erro desconhecido'));
+            renderActivePreviewBody();
+          }
+        } catch (err) {
+          alert('Erro ao resumir reunião: ' + err.message);
+          renderActivePreviewBody();
+        } finally {
+          isSummarizingInModal = false;
+          if (currentSelectedMeeting) {
+            updateSummaryBtnState(currentSelectedMeeting.hasSummary);
+          }
+        }
+      }
+
+      // History Modal Event Listeners
+      if (transcriptsHistoryBtn) {
+        transcriptsHistoryBtn.addEventListener('click', openHistoryModal);
+      }
+      if (closeHistoryModalBtn) {
+        closeHistoryModalBtn.addEventListener('click', closeHistoryModal);
+      }
+      if (historyModal) {
+        historyModal.addEventListener('click', (e) => {
+          if (e.target === historyModal) closeHistoryModal();
+        });
+      }
+      if (historyOpenFolderBtn) {
+        historyOpenFolderBtn.addEventListener('click', () => {
+          if (whysperAPI && whysperAPI.openTranscriptsFolder) whysperAPI.openTranscriptsFolder();
+        });
+      }
+      if (historySearchInput) {
+        historySearchInput.addEventListener('input', () => {
+          renderMeetingCards();
+        });
+      }
+      if (tabSummaryBtn) {
+        tabSummaryBtn.addEventListener('click', () => setActivePreviewTab('summary'));
+      }
+      if (tabTranscriptBtn) {
+        tabTranscriptBtn.addEventListener('click', () => setActivePreviewTab('transcript'));
+      }
+      if (previewCopyBtn) {
+        previewCopyBtn.addEventListener('click', () => {
+          const textToCopy = activePreviewTab === 'summary' ? currentMeetingSummaryText : currentMeetingTranscriptText;
+          if (!textToCopy) return;
+
+          if (whysperAPI && whysperAPI.copyToClipboard) {
+            whysperAPI.copyToClipboard(textToCopy);
+          } else if (navigator.clipboard) {
+            navigator.clipboard.writeText(textToCopy);
+          }
+
+          const originalHtml = previewCopyBtn.innerHTML;
+          previewCopyBtn.innerHTML = '<i class="fas fa-check"></i> Copiado!';
+          previewCopyBtn.style.background = '#00e676';
+          setTimeout(() => {
+            previewCopyBtn.innerHTML = originalHtml;
+            previewCopyBtn.style.background = '';
+          }, 2000);
+        });
+      }
+      if (previewGenerateSummaryBtn) {
+        previewGenerateSummaryBtn.addEventListener('click', triggerModalMeetingSummarization);
+      }
+      if (previewOpenFileBtn) {
+        previewOpenFileBtn.addEventListener('click', () => {
+          if (currentSelectedMeeting && whysperAPI && whysperAPI.openTranscriptFile) {
+            whysperAPI.openTranscriptFile(currentSelectedMeeting.name);
+          }
+        });
+      }
+      if (previewDeleteBtn) {
+        previewDeleteBtn.addEventListener('click', async () => {
+          if (!currentSelectedMeeting) return;
+          const ok = confirm(`Deseja realmente excluir a gravação "${currentSelectedMeeting.name}" e seus resumos salvos?\nEsta ação não poderá ser desfeita.`);
+          if (!ok) return;
+
+          try {
+            const res = await whysperAPI.deleteCallTranscript(currentSelectedMeeting.name);
+            if (res && res.success) {
+              const deletedName = currentSelectedMeeting.name;
+              historyMeetings = historyMeetings.filter(m => m.name !== deletedName);
+              currentSelectedMeeting = null;
+              updateHistoryStats();
+              renderMeetingCards();
+              if (historyMeetings.length > 0) {
+                selectMeeting(historyMeetings[0]);
+              } else {
+                resetPreviewPane();
+              }
+            } else {
+              alert('Erro ao excluir: ' + (res?.error || 'Erro desconhecido'));
+            }
+          } catch (err) {
+            alert('Falha ao excluir arquivo: ' + err.message);
+          }
+        });
+      }
+
+      // Global keyboard shortcut to close modal on Escape
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && historyModal && historyModal.classList.contains('active')) {
+          closeHistoryModal();
+        }
+      });
 
       // Global keyboard shortcuts
       document.addEventListener('keydown', (e) => {
