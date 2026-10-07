@@ -49,8 +49,11 @@ final class SystemAudioTapProof {
                     for sample in UnsafeBufferPointer(start: samples, count: count) {
                         self.peak = max(self.peak, abs(sample))
                     }
-                    guard index < output.count, let destination = output[index].mData else { continue }
-                    destination.copyMemory(from: source, byteCount: Int(min(sourceBuffer.mDataByteSize, output[index].mDataByteSize)))
+                }
+                for buffer in output {
+                    if let data = buffer.mData, buffer.mDataByteSize > 0 {
+                        memset(data, 0, Int(buffer.mDataByteSize))
+                    }
                 }
             },
             "creating audio callback"

@@ -628,18 +628,20 @@ class ApplicationController {
     ipcMain.handle("resize-window", (event, { width, height }) => {
       const mainWindow = windowManager.getWindow("main");
       if (mainWindow) {
-        // Enforce horizontal constraints: min ~one icon, max original width
-        const minW = 60;
-        const maxW = windowManager.windowConfigs?.main?.width || 520;
+        // Enforce flexible horizontal & vertical constraints
+        const minW = 80;
+        const maxW = 2400;
         const clampedWidth = Math.max(minW, Math.min(maxW, Math.round(width || minW)));
+        const minH = 44;
+        const clampedHeight = Math.max(minH, Math.round(height || minH));
         try {
           // Match content size to the DOM so no extra transparent area remains
-          mainWindow.setContentSize(Math.max(1, clampedWidth), Math.max(1, Math.round(height)));
+          mainWindow.setContentSize(clampedWidth, clampedHeight);
         } catch (e) {
-          // Fallback in case setContentSize isn’t available on some platform
-          mainWindow.setSize(Math.max(1, clampedWidth), Math.max(1, Math.round(height)));
+          // Fallback in case setContentSize isn't available on some platform
+          mainWindow.setSize(clampedWidth, clampedHeight);
         }
-        logger.debug("Main window resized (content)", { width: clampedWidth, height });
+        logger.debug("Main window resized (content)", { width: clampedWidth, height: clampedHeight });
       }
       return { success: true };
     });
@@ -1395,7 +1397,7 @@ class ApplicationController {
       whisperDevice: process.env.WHISPER_DEVICE || "auto",
       whisperCaptureMode: process.env.WHISPER_CAPTURE_MODE ||
         (process.env.WHISPER_MANUAL_CAPTURE === "true" ? "manual" : "vad"),
-      whisperResponseTarget: process.env.WHISPER_RESPONSE_TARGET || "both",
+      whisperResponseTarget: process.env.WHISPER_RESPONSE_TARGET || "chat",
       whisperSegmentMs: process.env.WHISPER_SEGMENT_MS || "4000",
       callAudioInputId: process.env.CALL_AUDIO_INPUT_ID || "default",
       micAudioInputId: process.env.MIC_AUDIO_INPUT_ID || "off",

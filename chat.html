@@ -80,6 +80,148 @@
         border-color: rgba(76, 175, 80, 0.6);
         color: #a5d6a7;
       }
+      .header-audio-badge {
+        -webkit-app-region: no-drag;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        border-radius: 16px;
+        padding: 4px 10px;
+        color: rgba(255, 255, 255, 0.9);
+        font-size: 11px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        user-select: none;
+      }
+      .header-audio-badge:hover {
+        background: rgba(255, 255, 255, 0.16);
+        border-color: rgba(255, 255, 255, 0.28);
+      }
+      .header-audio-badge i.fa-volume-high {
+        color: #38bdf8;
+      }
+      .header-audio-badge i.fa-microphone {
+        color: #a78bfa;
+      }
+      .chat-audio-menu,
+      .chat-export-menu {
+        position: absolute;
+        top: 55px;
+        right: 15px;
+        z-index: 1200;
+        min-width: 270px;
+        max-width: 340px;
+        padding: 8px;
+        border-radius: 10px;
+        background: rgba(20, 20, 24, 0.96);
+        backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        box-shadow: 0 16px 36px rgba(0, 0, 0, 0.55);
+        display: none;
+        -webkit-app-region: no-drag;
+      }
+      .chat-audio-menu.is-open,
+      .chat-export-menu.is-open {
+        display: block;
+      }
+      .chat-audio-menu .menu-section-header,
+      .chat-export-menu .menu-section-header {
+        font-size: 10px;
+        font-weight: 700;
+        color: rgba(255, 255, 255, 0.45);
+        padding: 4px 8px 6px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      .chat-audio-menu .menu-divider {
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        margin: 6px 0;
+      }
+      .chat-audio-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        padding: 7px 10px;
+        border-radius: 6px;
+        border: 0;
+        background: transparent;
+        color: rgba(255, 255, 255, 0.9);
+        cursor: pointer;
+        transition: all 0.15s ease;
+        text-align: left;
+        font-size: 12px;
+      }
+      .chat-audio-item:hover {
+        background: rgba(255, 255, 255, 0.12);
+      }
+      .chat-audio-item[aria-checked="true"] {
+        background: rgba(56, 189, 248, 0.16);
+        color: #fff;
+      }
+      .chat-audio-item-left {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        min-width: 0;
+        flex: 1;
+      }
+      .chat-audio-item-left i {
+        font-size: 13px;
+        flex-shrink: 0;
+        width: 16px;
+        text-align: center;
+      }
+      .chat-audio-item-info {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+      .chat-audio-item-name {
+        font-size: 11.5px;
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .chat-audio-item-desc {
+        font-size: 9.5px;
+        color: rgba(255, 255, 255, 0.5);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .chat-audio-item .checkmark {
+        color: #38bdf8;
+        font-size: 11px;
+        margin-left: 8px;
+        opacity: 0;
+      }
+      .chat-audio-item[aria-checked="true"] .checkmark {
+        opacity: 1;
+      }
+      .chat-menu-action-btn {
+        width: 100%;
+        color: #60a5fa;
+        font-size: 11px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 10px;
+        border-radius: 6px;
+        border: 0;
+        background: transparent;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        text-align: left;
+      }
+      .chat-menu-action-btn:hover {
+        background: rgba(96, 165, 250, 0.15);
+      }
       .recording-indicator {
         width: 8px;
         height: 8px;
@@ -1236,19 +1378,61 @@
           <div class="recording-indicator" id="recordingIndicator"></div>
         </div>
         <div class="header-actions">
+          <div class="header-audio-badge" id="chatAudioSourceBadge" role="button" tabindex="0" title="Fonte de áudio capturada (Clique para alternar)">
+            <i class="fas fa-volume-high" id="chatAudioSourceIcon"></i>
+            <span id="chatAudioSourceLabel">Sistema</span>
+            <i class="fas fa-chevron-down" style="font-size: 8px; opacity: 0.6; margin-left: 2px;"></i>
+          </div>
           <button class="icon-button" id="transcriptsHistoryBtn" title="Histórico de Reuniões & Transcrições" style="font-size: 11px; padding: 4px 8px; display: inline-flex; align-items: center; gap: 4px;">
             <i class="fas fa-history"></i> <span style="font-size: 10px; font-weight: 600;">Histórico</span>
           </button>
           <button class="icon-button" id="summarizeMeetingBtn" title="Resumir Reunião (Gerar ata/resumo executivo da transcrição)" style="font-size: 11px; padding: 4px 8px; display: inline-flex; align-items: center; gap: 4px;">
             <i class="fas fa-file-invoice"></i> <span id="summarizeBtnLabel" style="font-size: 10px; font-weight: 600;">Resumo</span>
           </button>
+          <button class="icon-button" id="exportChatBtn" title="Exportar Reunião & Mensagens (PDF, Checklist, Notion, Mensagens)" style="font-size: 11px; padding: 4px 8px; display: inline-flex; align-items: center; gap: 4px;">
+            <i class="fas fa-file-export"></i> <span style="font-size: 10px; font-weight: 600;">Exportar</span>
+          </button>
           <button class="icon-button" id="translateToggleBtn" title="Traduzir transcrição para Português (Lado a Lado)" style="font-size: 11px; padding: 4px 8px; display: inline-flex; align-items: center; gap: 4px;">
             <i class="fas fa-language"></i> <span id="translateToggleLabel" style="font-size: 10px; font-weight: 600;">PT: OFF</span>
+          </button>
+          <button class="icon-button" id="chatSettingsBtn" title="Configurações (Áudio, Modelo, Atalhos)" style="font-size: 11px; padding: 4px 8px; display: inline-flex; align-items: center; gap: 4px;">
+            <i class="fas fa-gear"></i>
           </button>
           <button class="icon-button" id="clearHistoryBtn" title="Clear chat history">
             <i class="fas fa-trash"></i>
           </button>
         </div>
+      </div>
+
+      <!-- Quick Audio Source Selector Dropdown in Chat -->
+      <div class="chat-audio-menu" id="chatAudioMenu" role="menu">
+        <div class="menu-section-header">Fonte de Captura de Áudio</div>
+        <div id="chatAudioOptions"></div>
+        <div class="menu-divider"></div>
+        <button type="button" id="chatOpenSettingsAudioBtn" class="chat-menu-action-btn">
+          <i class="fas fa-sliders" style="margin-right: 6px;"></i>Mais Ajustes de Áudio…
+        </button>
+      </div>
+
+      <!-- Quick Export Menu in Chat -->
+      <div class="chat-export-menu" id="chatExportMenu" role="menu">
+        <div class="menu-section-header">Exportar Reunião & Mensagens</div>
+        <button type="button" class="chat-menu-action-btn" id="menuExportPdfBtn">
+          <i class="fas fa-file-pdf" style="color: #ff5252; margin-right: 8px;"></i> Relatório em PDF Executivo
+        </button>
+        <button type="button" class="chat-menu-action-btn" id="menuExportChecklistBtn">
+          <i class="fas fa-check-square" style="color: #00e676; margin-right: 8px;"></i> Copiar Checklist de Ações
+        </button>
+        <button type="button" class="chat-menu-action-btn" id="menuExportNotionBtn">
+          <i class="fas fa-file-lines" style="color: #40c4ff; margin-right: 8px;"></i> Copiar Template Notion / Slack
+        </button>
+        <button type="button" class="chat-menu-action-btn" id="menuExportMessagesBtn">
+          <i class="fas fa-comments" style="color: #b388ff; margin-right: 8px;"></i> Copiar Mensagens do Chat (TXT)
+        </button>
+        <div class="menu-divider"></div>
+        <button type="button" class="chat-menu-action-btn" id="menuOpenFolderBtn">
+          <i class="fas fa-folder-open" style="color: #ffd700; margin-right: 8px;"></i> Abrir Pasta de Transcrições
+        </button>
       </div>
 
       <!-- Interim Text Overlay -->
@@ -2374,9 +2558,146 @@
         });
       }
 
+      function getFormattedChatMessages() {
+        if (!chatHistory || chatHistory.length === 0) return '';
+        const lines = [
+          `=========================================`,
+          `  OPENCLUELY - EXPORTAÇÃO DE CONVERSA`,
+          `  Data: ${new Date().toLocaleString()}`,
+          `  Total de mensagens: ${chatHistory.length}`,
+          `=========================================\n`
+        ];
+
+        chatHistory.forEach((item) => {
+          if (!item) return;
+          if (item.kind === 'bilingual_transcription') {
+            const sp = item.speaker ? `[${item.speaker}] ` : '';
+            lines.push(`${sp}${item.originalText || ''}`);
+            if (item.translationPT) lines.push(`[TRADUÇÃO PT] ${item.translationPT}`);
+            lines.push('');
+          } else if (item.kind === 'message') {
+            const role = item.type ? `[${item.type.toUpperCase()}]` : '[CHAT]';
+            const sp = item.speaker ? `[${item.speaker}] ` : '';
+            lines.push(`${role} ${sp}${item.text || ''}`);
+            lines.push('');
+          } else if (item.kind === 'summary') {
+            lines.push(`[RESUMO EXECUTIVO DA REUNIÃO]\n${item.summary || ''}\n`);
+          } else if (item.kind === 'snippet') {
+            lines.push(`[CÓDIGO - ${item.language || 'snippet'}]\n${item.code || ''}\n`);
+          } else if (item.text) {
+            lines.push(item.text);
+            lines.push('');
+          }
+        });
+
+        return lines.join('\n');
+      }
+
+      async function exportChatMessages() {
+        const content = getFormattedChatMessages();
+        if (!content || !content.trim()) {
+          addMessage('⚠️ Nenhuma mensagem encontrada no chat atual para exportar.', 'system');
+          return;
+        }
+
+        try {
+          if (whysperAPI && whysperAPI.copyToClipboard) {
+            await whysperAPI.copyToClipboard(content);
+          } else if (navigator.clipboard) {
+            await navigator.clipboard.writeText(content);
+          }
+          const count = chatHistory.length;
+          addMessage(`✅ ${count} mensagens do chat foram exportadas e copiadas para a área de transferência!`, 'system');
+        } catch (err) {
+          addMessage(`⚠️ Erro ao copiar mensagens: ${err.message}`, 'error');
+        }
+      }
+
+      function showExportActionsMessage() {
+        const card = document.createElement('div');
+        card.className = 'message system';
+        card.innerHTML = `
+          <div style="font-weight: 700; color: #fff; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+            <i class="fas fa-file-export" style="color: #7c4dff;"></i> Central de Exportação OpenCluely
+          </div>
+          <div style="font-size: 11px; color: rgba(255,255,255,0.7); margin-bottom: 10px;">
+            Escolha o formato desejado para exportar a reunião ou conversa atual:
+          </div>
+          <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+            <button class="preview-action-btn primary" id="chatActionPdfBtn" style="font-size: 11px; padding: 6px 10px;">
+              <i class="fas fa-file-pdf" style="color: #ff5252;"></i> Exportar PDF
+            </button>
+            <button class="preview-action-btn" id="chatActionChecklistBtn" style="font-size: 11px; padding: 6px 10px;">
+              <i class="fas fa-check-square" style="color: #00e676;"></i> Copiar Checklist
+            </button>
+            <button class="preview-action-btn" id="chatActionNotionBtn" style="font-size: 11px; padding: 6px 10px;">
+              <i class="fas fa-file-lines" style="color: #40c4ff;"></i> Copiar Notion/Slack
+            </button>
+            <button class="preview-action-btn" id="chatActionMessagesBtn" style="font-size: 11px; padding: 6px 10px;">
+              <i class="fas fa-comments" style="color: #b388ff;"></i> Copiar Mensagens (TXT)
+            </button>
+          </div>
+        `;
+        chatMessages.appendChild(card);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+
+        card.querySelector('#chatActionPdfBtn')?.addEventListener('click', async () => {
+          if (whysperAPI && whysperAPI.exportCallTranscript) {
+            addMessage('📄 Exportando relatório executivo em PDF...', 'system');
+            try {
+              const res = await whysperAPI.exportCallTranscript({ format: 'pdf' });
+              if (res && res.success) addMessage(`✅ PDF exportado com sucesso: ${res.fileName}`, 'system');
+              else addMessage(`⚠️ Erro ao exportar PDF: ${res?.error || 'Erro desconhecido'}`, 'error');
+            } catch (e) {
+              addMessage(`⚠️ Erro ao exportar PDF: ${e.message}`, 'error');
+            }
+          }
+        });
+
+        card.querySelector('#chatActionChecklistBtn')?.addEventListener('click', async () => {
+          if (whysperAPI && whysperAPI.exportCallTranscript) {
+            try {
+              const res = await whysperAPI.exportCallTranscript({ format: 'checklist' });
+              if (res && res.success && res.content) {
+                if (whysperAPI.copyToClipboard) await whysperAPI.copyToClipboard(res.content);
+                else navigator.clipboard.writeText(res.content);
+                addMessage('✅ Checklist de Ações copiada para a área de transferência!', 'system');
+              } else {
+                addMessage(`⚠️ ${res?.error || 'Nenhuma checklist encontrada.'}`, 'error');
+              }
+            } catch (e) {
+              addMessage(`⚠️ Erro ao copiar checklist: ${e.message}`, 'error');
+            }
+          }
+        });
+
+        card.querySelector('#chatActionNotionBtn')?.addEventListener('click', async () => {
+          if (whysperAPI && whysperAPI.exportCallTranscript) {
+            try {
+              const res = await whysperAPI.exportCallTranscript({ format: 'notion' });
+              if (res && res.success && res.content) {
+                if (whysperAPI.copyToClipboard) await whysperAPI.copyToClipboard(res.content);
+                else navigator.clipboard.writeText(res.content);
+                addMessage('📋 Template Notion/Slack copiado para a área de transferência!', 'system');
+              } else {
+                addMessage(`⚠️ ${res?.error || 'Falha ao gerar template.'}`, 'error');
+              }
+            } catch (e) {
+              addMessage(`⚠️ Erro ao gerar template: ${e.message}`, 'error');
+            }
+          }
+        });
+
+        card.querySelector('#chatActionMessagesBtn')?.addEventListener('click', () => {
+          exportChatMessages();
+        });
+      }
+
       async function handleUserChatMessage(rawText) {
         const text = (rawText || '').trim();
         if (!text) return;
+
+        const lower = text.toLowerCase();
 
         // Check for quick slash commands
         if (
@@ -2399,6 +2720,22 @@
           messageInput.value = '';
           autoGrow(messageInput);
           openHistoryModal();
+          return;
+        }
+
+        if (lower === '/export' || lower === '/exportar' || lower === '/exportacoes') {
+          addMessage(text, 'user');
+          messageInput.value = '';
+          autoGrow(messageInput);
+          showExportActionsMessage();
+          return;
+        }
+
+        if (lower === '/mensagens' || lower === '/chatlog' || lower === '/exportarmensagens' || lower === '/exportar-mensagens') {
+          addMessage(text, 'user');
+          messageInput.value = '';
+          autoGrow(messageInput);
+          await exportChatMessages();
           return;
         }
 
@@ -2457,6 +2794,25 @@
           } catch (e) {
             addMessage(`⚠️ Erro ao copiar checklist: ${e.message}`, 'error');
           }
+          return;
+        }
+
+        if (lower === '/ajuda' || lower === '/help' || lower === '/comandos') {
+          addMessage(text, 'user');
+          messageInput.value = '';
+          autoGrow(messageInput);
+          addMessage(
+            `💡 **Comandos Rápidos do OpenCluely**:\n\n` +
+            `• \`/resumo\` — Sintetiza a reunião com IA e gera decisões/próximos passos\n` +
+            `• \`/pdf\` — Exporta relatório executivo diagramado em PDF vetorial\n` +
+            `• \`/checklist\` — Extrai e copia os Action Items da reunião\n` +
+            `• \`/notion\` ou \`/slack\` — Copia ata formatada para Notion/Slack\n` +
+            `• \`/mensagens\` — Copia o histórico completo de mensagens do chat\n` +
+            `• \`/export\` — Abre os botões da central de exportação rápida\n` +
+            `• \`/historico\` — Abre histórico com todas as transcrições e atas\n` +
+            `• \`/pontos <pergunta>\` — Gera Smart Talking Points para perguntas de entrevista`,
+            'system'
+          );
           return;
         }
 
@@ -3075,6 +3431,301 @@
       if (!chatHistory || chatHistory.length === 0) {
         addMessage('Recording in Progress. press Alt+R to stop recording.', 'system');
       }
+
+      // Audio Source and Settings Management in Chat Window
+      const chatAudioSourceBadge = document.getElementById('chatAudioSourceBadge');
+      const chatAudioSourceIcon = document.getElementById('chatAudioSourceIcon');
+      const chatAudioSourceLabel = document.getElementById('chatAudioSourceLabel');
+      const chatAudioMenu = document.getElementById('chatAudioMenu');
+      const chatAudioOptions = document.getElementById('chatAudioOptions');
+      const chatOpenSettingsAudioBtn = document.getElementById('chatOpenSettingsAudioBtn');
+      const chatSettingsBtn = document.getElementById('chatSettingsBtn');
+
+      let currentChatCallAudioInputId = 'system-audio-macos';
+      let chatAvailableAudioDevices = [];
+
+      async function refreshChatAudioSourceState() {
+        try {
+          if (whysperAPI && whysperAPI.getSettings) {
+            const settings = await whysperAPI.getSettings();
+            if (settings && settings.callAudioInputId) {
+              currentChatCallAudioInputId = settings.callAudioInputId;
+            }
+          }
+          if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            chatAvailableAudioDevices = devices.filter(d => d.kind === 'audioinput');
+          }
+          updateChatAudioBadgeUI();
+          if (chatAudioMenu && chatAudioMenu.classList.contains('is-open')) {
+            renderChatAudioOptions();
+          }
+        } catch (e) {
+          console.warn('Failed to refresh audio source in chat:', e);
+        }
+      }
+
+      function updateChatAudioBadgeUI() {
+        if (!chatAudioSourceLabel || !chatAudioSourceIcon) return;
+        const currentId = currentChatCallAudioInputId || 'system-audio-macos';
+        if (currentId === 'system-audio-macos') {
+          chatAudioSourceIcon.className = 'fas fa-volume-high';
+          chatAudioSourceIcon.style.color = '#38bdf8';
+          chatAudioSourceLabel.textContent = 'Sistema';
+          if (chatAudioSourceBadge) {
+            chatAudioSourceBadge.title = 'Fonte: Áudio do Sistema (Zoom, Meet, Teams, vídeos). Clique para alternar.';
+          }
+        } else if (currentId === 'default') {
+          chatAudioSourceIcon.className = 'fas fa-microphone';
+          chatAudioSourceIcon.style.color = '#a78bfa';
+          chatAudioSourceLabel.textContent = 'Mic Padrão';
+          if (chatAudioSourceBadge) {
+            chatAudioSourceBadge.title = 'Fonte: Microfone padrão do sistema. Clique para alternar.';
+          }
+        } else {
+          const dev = chatAvailableAudioDevices.find(d => d.deviceId === currentId);
+          const name = dev?.label || 'Microfone';
+          const shortName = name.length > 12 ? name.substring(0, 10) + '…' : name;
+          chatAudioSourceIcon.className = 'fas fa-microphone';
+          chatAudioSourceIcon.style.color = '#a78bfa';
+          chatAudioSourceLabel.textContent = shortName;
+          if (chatAudioSourceBadge) {
+            chatAudioSourceBadge.title = `Fonte: ${name}. Clique para alternar.`;
+          }
+        }
+      }
+
+      function renderChatAudioOptions() {
+        if (!chatAudioOptions) return;
+        chatAudioOptions.innerHTML = '';
+        const currentId = currentChatCallAudioInputId || 'system-audio-macos';
+        const isMac = navigator.platform.toLowerCase().includes('mac');
+
+        const options = [];
+        if (isMac) {
+          options.push({
+            id: 'system-audio-macos',
+            icon: 'fas fa-volume-high',
+            iconColor: '#38bdf8',
+            name: 'Áudio do Sistema',
+            desc: 'Captura sons de chamadas (Zoom, Meet, Teams, etc.)'
+          });
+        }
+        options.push({
+          id: 'default',
+          icon: 'fas fa-microphone',
+          iconColor: '#a78bfa',
+          name: 'Microfone Padrão',
+          desc: 'Entrada de voz padrão do macOS'
+        });
+
+        chatAvailableAudioDevices.forEach((dev, idx) => {
+          if (dev.deviceId && dev.deviceId !== 'default') {
+            options.push({
+              id: dev.deviceId,
+              icon: 'fas fa-microphone',
+              iconColor: '#a78bfa',
+              name: dev.label || `Microfone ${idx + 1}`,
+              desc: 'Microfone de dispositivo conectado'
+            });
+          }
+        });
+
+        options.forEach(opt => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'chat-audio-item';
+          btn.setAttribute('role', 'menuitemradio');
+          const isChecked = opt.id === currentId;
+          btn.setAttribute('aria-checked', String(isChecked));
+          btn.innerHTML = `
+            <div class="chat-audio-item-left">
+              <i class="${opt.icon}" style="color: ${opt.iconColor};"></i>
+              <div class="chat-audio-item-info">
+                <span class="chat-audio-item-name">${opt.name}</span>
+                <span class="chat-audio-item-desc">${opt.desc}</span>
+              </div>
+            </div>
+            <i class="fas fa-check checkmark"></i>
+          `;
+          btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            await selectChatAudioSource(opt.id);
+          });
+          chatAudioOptions.appendChild(btn);
+        });
+      }
+
+      async function selectChatAudioSource(newId) {
+        try {
+          currentChatCallAudioInputId = newId;
+          updateChatAudioBadgeUI();
+          if (chatAudioMenu) chatAudioMenu.classList.remove('is-open');
+          if (whysperAPI && whysperAPI.saveSettings) {
+            await whysperAPI.saveSettings({ callAudioInputId: newId });
+          }
+        } catch (e) {
+          console.error('Failed to change audio source from chat:', e);
+        }
+      }
+
+      if (chatAudioSourceBadge) {
+        chatAudioSourceBadge.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (chatAudioMenu) {
+            const isOpen = chatAudioMenu.classList.toggle('is-open');
+            if (isOpen) renderChatAudioOptions();
+          }
+        });
+      }
+
+      if (chatOpenSettingsAudioBtn) {
+        chatOpenSettingsAudioBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (chatAudioMenu) chatAudioMenu.classList.remove('is-open');
+          if (whysperAPI && whysperAPI.showSettings) whysperAPI.showSettings();
+        });
+      }
+
+      if (chatSettingsBtn) {
+        chatSettingsBtn.addEventListener('click', () => {
+          if (whysperAPI && whysperAPI.showSettings) whysperAPI.showSettings();
+        });
+      }
+
+      // Export Menu Bindings in Chat
+      const exportChatBtn = document.getElementById('exportChatBtn');
+      const chatExportMenu = document.getElementById('chatExportMenu');
+      const menuExportPdfBtn = document.getElementById('menuExportPdfBtn');
+      const menuExportChecklistBtn = document.getElementById('menuExportChecklistBtn');
+      const menuExportNotionBtn = document.getElementById('menuExportNotionBtn');
+      const menuExportMessagesBtn = document.getElementById('menuExportMessagesBtn');
+      const menuOpenFolderBtn = document.getElementById('menuOpenFolderBtn');
+
+      if (exportChatBtn && chatExportMenu) {
+        exportChatBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (chatAudioMenu) chatAudioMenu.classList.remove('is-open');
+          chatExportMenu.classList.toggle('is-open');
+        });
+      }
+
+      if (menuExportPdfBtn) {
+        menuExportPdfBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          if (chatExportMenu) chatExportMenu.classList.remove('is-open');
+          addMessage('📄 Exportando relatório executivo em PDF...', 'system');
+          try {
+            if (whysperAPI && whysperAPI.exportCallTranscript) {
+              const res = await whysperAPI.exportCallTranscript({ format: 'pdf' });
+              if (res && res.success) {
+                addMessage(`✅ PDF exportado com sucesso: ${res.fileName}`, 'system');
+              } else {
+                addMessage(`⚠️ Falha ao exportar PDF: ${res?.error || 'Erro desconhecido'}`, 'error');
+              }
+            }
+          } catch (err) {
+            addMessage(`⚠️ Erro ao exportar PDF: ${err.message}`, 'error');
+          }
+        });
+      }
+
+      if (menuExportChecklistBtn) {
+        menuExportChecklistBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          if (chatExportMenu) chatExportMenu.classList.remove('is-open');
+          try {
+            if (whysperAPI && whysperAPI.exportCallTranscript) {
+              const res = await whysperAPI.exportCallTranscript({ format: 'checklist' });
+              if (res && res.success && res.content) {
+                if (whysperAPI.copyToClipboard) await whysperAPI.copyToClipboard(res.content);
+                else navigator.clipboard.writeText(res.content);
+                addMessage('✅ Checklist de Ações copiada para a área de transferência!', 'system');
+              } else {
+                addMessage(`⚠️ ${res?.error || 'Nenhuma checklist encontrada.'}`, 'error');
+              }
+            }
+          } catch (err) {
+            addMessage(`⚠️ Erro ao copiar checklist: ${err.message}`, 'error');
+          }
+        });
+      }
+
+      if (menuExportNotionBtn) {
+        menuExportNotionBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          if (chatExportMenu) chatExportMenu.classList.remove('is-open');
+          try {
+            if (whysperAPI && whysperAPI.exportCallTranscript) {
+              const res = await whysperAPI.exportCallTranscript({ format: 'notion' });
+              if (res && res.success && res.content) {
+                if (whysperAPI.copyToClipboard) await whysperAPI.copyToClipboard(res.content);
+                else navigator.clipboard.writeText(res.content);
+                addMessage('📋 Template Notion/Slack copiado para a área de transferência!', 'system');
+              } else {
+                addMessage(`⚠️ ${res?.error || 'Falha ao gerar template.'}`, 'error');
+              }
+            }
+          } catch (err) {
+            addMessage(`⚠️ Erro ao gerar template: ${err.message}`, 'error');
+          }
+        });
+      }
+
+      if (menuExportMessagesBtn) {
+        menuExportMessagesBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          if (chatExportMenu) chatExportMenu.classList.remove('is-open');
+          await exportChatMessages();
+        });
+      }
+
+      if (menuOpenFolderBtn) {
+        menuOpenFolderBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (chatExportMenu) chatExportMenu.classList.remove('is-open');
+          if (whysperAPI && whysperAPI.openTranscriptsFolder) {
+            whysperAPI.openTranscriptsFolder();
+          }
+        });
+      }
+
+      document.addEventListener('click', (e) => {
+        if (chatAudioMenu && !chatAudioMenu.contains(e.target) && !chatAudioSourceBadge?.contains(e.target)) {
+          chatAudioMenu.classList.remove('is-open');
+        }
+        if (chatExportMenu && !chatExportMenu.contains(e.target) && !exportChatBtn?.contains(e.target)) {
+          chatExportMenu.classList.remove('is-open');
+        }
+      });
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          if (chatAudioMenu) chatAudioMenu.classList.remove('is-open');
+          if (chatExportMenu) chatExportMenu.classList.remove('is-open');
+        }
+      });
+
+      // Listen for settings and device changes
+      if (whysperAPI && whysperAPI.onAudioInputSettingsChanged) {
+        whysperAPI.onAudioInputSettingsChanged((_event, settings) => {
+          if (settings && settings.callAudioInputId) {
+            currentChatCallAudioInputId = settings.callAudioInputId;
+            updateChatAudioBadgeUI();
+          }
+        });
+      } else if (whysperAPI && whysperAPI.receive) {
+        whysperAPI.receive('audio-input-settings-changed', (_event, settings) => {
+          if (settings && settings.callAudioInputId) {
+            currentChatCallAudioInputId = settings.callAudioInputId;
+            updateChatAudioBadgeUI();
+          }
+        });
+      }
+
+      navigator.mediaDevices?.addEventListener?.('devicechange', refreshChatAudioSourceState);
+
+      // Initial load
+      refreshChatAudioSourceState();
     </script>
   </body>
 </html>

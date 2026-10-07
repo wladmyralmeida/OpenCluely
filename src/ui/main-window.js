@@ -18,10 +18,18 @@ class MainWindowUI {
         this.isRecording = false;
         this.speechAvailable = false; // track availability
         this._popoverHideTimeout = null;
+        this.audioSourceIndicator = null;
+        this.audioSourceIcon = null;
+        this.audioSourceLabel = null;
+        this.audioSourceMenu = null;
+        this.audioSourceOptions = null;
+        this.openSettingsFromAudioMenu = null;
+        this.availableAudioDevices = [];
         // Renderer-side Whisper capture state (Windows and macOS).
         this._audioContext = null;
         this._mediaStream = null;
         this._scriptNode = null;
+        this._gainNode = null;
         this._captureInterval = null;
         this._captureGeneration = 0;
         this._callAudioInputId = null;
@@ -49,6 +57,9 @@ class MainWindowUI {
             
             // Fetch speech availability
             await this.loadSpeechAvailability();
+            
+            // Load audio source state
+            await this.loadAudioSourceState();
             
             this.updateSkillIndicator();
             this.updateAllElementStates(); // Update all elements with current state
@@ -147,6 +158,7 @@ class MainWindowUI {
         this.updateSkillIndicatorState();
         this.updateMicButtonState();
         this.updateSettingsIndicatorState();
+        this.updateAudioSourceIndicatorState();
     }
 
     updateStatusDot() {
@@ -214,10 +226,21 @@ class MainWindowUI {
             // Update button state
             this.micButton.disabled = !this.isInteractive;
             
+            const micLabel = document.getElementById('micLabel');
+            if (micLabel) {
+                micLabel.textContent = this.isRecording ? 'Gravando' : 'Gravar';
+            }
+            if (this.isRecording) {
+                this.micButton.classList.add('recording');
+            } else {
+                this.micButton.classList.remove('recording');
+            }
+            
             logger.debug('Mic button state updated', {
                 component: 'MainWindowUI',
                 interactive: this.isInteractive,
-                disabled: !this.isInteractive
+                disabled: !this.isInteractive,
+                recording: this.isRecording
             });
         }
     }
@@ -243,11 +266,29 @@ class MainWindowUI {
         }
     }
 
+    updateAudioSourceIndicatorState() {
+        if (this.audioSourceIndicator) {
+            this.audioSourceIndicator.classList.remove('interactive', 'non-interactive');
+            if (this.isInteractive) {
+                this.audioSourceIndicator.classList.add('interactive');
+            } else {
+                this.audioSourceIndicator.classList.add('non-interactive');
+            }
+        }
+    }
+
     resizeWindowToContent() {
         // Wait for DOM to fully render
         setTimeout(() => {
             const commandTab = document.querySelector('.command-tab');
             if (commandTab && window.electronAPI && window.electronAPI.resizeWindow) {
+                const savedWidth = localStorage.getItem('opencluely_toolbar_width');
+                if (savedWidth && parseInt(savedWidth, 10) >= 260) {
+                    commandTab.style.width = `${parseInt(savedWidth, 10)}px`;
+                } else {
+                    commandTab.style.width = 'max-content';
+                }
+
                 const rect = commandTab.getBoundingClientRect();
                 let width = Math.ceil(rect.width);
                 let height = Math.ceil(rect.height);
@@ -255,13 +296,17 @@ class MainWindowUI {
                 // If shortcuts popover is visible, extend height to fit it
                 if (this.shortcutsPopover && this.shortcutsPopover.classList.contains('is-open')) {
                     const popRect = this.shortcutsPopover.getBoundingClientRect();
-                    // popover is positioned below the bar (top:36px), add that plus its height and a small margin
-                    height = Math.max(height, Math.ceil(36 + popRect.height + 8));
+                    height = Math.max(height, Math.ceil(50 + popRect.height + 12));
                 }
                 if (this.skillMenu && this.skillMenu.classList.contains('is-open')) {
                     const menuRect = this.skillMenu.getBoundingClientRect();
-                    width = Math.max(width, Math.ceil(menuRect.width + 16));
-                    height = Math.max(height, Math.ceil(menuRect.bottom + 8));
+                    width = Math.max(width, Math.ceil(menuRect.width + 30));
+                    height = Math.max(height, Math.ceil(menuRect.bottom + 12));
+                }
+                if (this.audioSourceMenu && this.audioSourceMenu.classList.contains('is-open')) {
+                    const menuRect = this.audioSourceMenu.getBoundingClientRect();
+                    width = Math.max(width, Math.ceil(menuRect.width + 30));
+                    height = Math.max(height, Math.ceil(menuRect.bottom + 12));
                 }
                 
                 logger.debug('Resizing window to content', {
@@ -272,7 +317,7 @@ class MainWindowUI {
                 
                 window.electronAPI.resizeWindow(width, height);
             }
-        }, 100);
+        }, 80);
     }
 
     setupElements() {
@@ -281,15 +326,98 @@ class MainWindowUI {
         this.skillMenu = document.getElementById('skillMenu');
         this.settingsIndicator = document.getElementById('settingsIndicator'); // Optional
         this.micButton = document.getElementById('micButton');
-    this.infoButton = document.getElementById('infoButton');
-    this.shortcutsPopover = document.getElementById('shortcutsPopover');
+        this.infoButton = document.getElementById('infoButton');
+        this.shortcutsPopover = document.getElementById('shortcutsPopover');
+        this.audioSourceIndicator = document.getElementById('audioSourceIndicator');
+        this.audioSourceIcon = document.getElementById('audioSourceIcon');
+        this.audioSourceLabel = document.getElementById('audioSourceLabel');
+        this.audioSourceMenu = document.getElementById('audioSourceMenu');
+        this.audioSourceOptions = document.getElementById('audioSourceOptions');
+        this.openSettingsFromAudioMenu = document.getElementById('openSettingsFromAudioMenu');
+        this.chatButton = document.getElementById('chatButton');
+        this.newSessionButton = document.getElementById('newSessionButton');
+        this.resizeHandle = document.getElementById('resizeHandle');
 
-        // NEW: Screenshot button is the first .command-item without id
         const commandItems = document.querySelectorAll('.command-item');
-        this.screenshotButton = commandItems && commandItems[0];
+        this.screenshotButton = document.getElementById('screenshotButton') || (commandItems && commandItems[0]);
 
-    if (!this.statusDot || !this.skillIndicator || !this.micButton || !this.screenshotButton) {
+        if (!this.statusDot || !this.skillIndicator || !this.micButton || !this.screenshotButton) {
             throw new Error('Required UI elements not found');
+        }
+
+        // Chat Button click handler
+        if (this.chatButton) {
+            this.chatButton.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if (window.electronAPI && window.electronAPI.switchToChat) {
+                    await window.electronAPI.switchToChat();
+                }
+            });
+        }
+
+        // New Session / Reset Memory button click handler
+        if (this.newSessionButton) {
+            this.newSessionButton.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if (window.electronAPI && window.electronAPI.clearSessionMemory) {
+                    try {
+                        await window.electronAPI.clearSessionMemory();
+                        this.showNotification('Sessão reiniciada!', 'info');
+                    } catch (err) {
+                        logger.warn('Failed to clear session memory', { error: err.message });
+                    }
+                }
+            });
+        }
+
+        // Drag-to-resize handle
+        if (this.resizeHandle) {
+            let isResizing = false;
+            let startX = 0;
+            let startWidth = 0;
+            const commandTab = document.querySelector('.command-tab');
+
+            this.resizeHandle.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                isResizing = true;
+                startX = e.screenX;
+                const rect = commandTab.getBoundingClientRect();
+                startWidth = rect.width;
+                document.body.style.cursor = 'ew-resize';
+
+                const onMouseMove = (moveEvent) => {
+                    if (!isResizing) return;
+                    const deltaX = moveEvent.screenX - startX;
+                    const newWidth = Math.max(300, Math.min(2200, Math.round(startWidth + deltaX)));
+                    commandTab.style.width = `${newWidth}px`;
+                    if (window.electronAPI && window.electronAPI.resizeWindow) {
+                        window.electronAPI.resizeWindow(newWidth, Math.ceil(rect.height));
+                    }
+                };
+
+                const onMouseUp = () => {
+                    if (!isResizing) return;
+                    isResizing = false;
+                    document.body.style.cursor = '';
+                    const finalRect = commandTab.getBoundingClientRect();
+                    localStorage.setItem('opencluely_toolbar_width', String(Math.round(finalRect.width)));
+                    window.removeEventListener('mousemove', onMouseMove);
+                    window.removeEventListener('mouseup', onMouseUp);
+                };
+
+                window.addEventListener('mousemove', onMouseMove);
+                window.addEventListener('mouseup', onMouseUp);
+            });
+
+            // Double click resets to content width
+            this.resizeHandle.addEventListener('dblclick', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                localStorage.removeItem('opencluely_toolbar_width');
+                commandTab.style.width = 'max-content';
+                this.resizeWindowToContent();
+            });
         }
 
         // Screenshot click handler
@@ -330,11 +458,40 @@ class MainWindowUI {
             });
         }
 
-        // Check for required elements (settingsIndicator is optional)
+        // Audio Source selector toggle
+        if (this.audioSourceIndicator) {
+            this.audioSourceIndicator.addEventListener('click', (event) => {
+                if (!this.isInteractive) return;
+                event.stopPropagation();
+                this.toggleAudioSourceMenu();
+            });
+            this.audioSourceIndicator.addEventListener('keydown', (event) => {
+                if (!this.isInteractive || !['Enter', ' '].includes(event.key)) return;
+                event.preventDefault();
+                this.toggleAudioSourceMenu();
+            });
+        }
+        if (this.openSettingsFromAudioMenu) {
+            this.openSettingsFromAudioMenu.addEventListener('click', (event) => {
+                event.stopPropagation();
+                this.hideAudioSourceMenu();
+                this.openSettings();
+            });
+        }
+        document.addEventListener('click', (event) => {
+            if (this.audioSourceMenu && !this.audioSourceMenu.contains(event.target) && !this.audioSourceIndicator?.contains(event.target)) {
+                this.hideAudioSourceMenu();
+            }
+        });
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') this.hideAudioSourceMenu();
+        });
+
+        // Check for required elements (settingsIndicator opens settings directly)
         if (this.settingsIndicator) {
             this.settingsIndicator.addEventListener('click', () => {
                 if (this.isInteractive) {
-                    this.showSettingsMenu();
+                    this.openSettings();
                 }
             });
         }
@@ -462,16 +619,18 @@ class MainWindowUI {
                 this.handleRecordingStopped();
             });
 
-            window.electronAPI.receive('audio-input-settings-changed', (_event, settings) => {
+            window.electronAPI.receive('audio-input-settings-changed', async (_event, settings) => {
+                await this.loadAudioSourceState();
                 if (this.isRecording && settings?.callAudioInputId !== this._callAudioInputId) {
                     this._startRendererAudioCapture();
                 }
             });
 
             navigator.mediaDevices?.addEventListener?.('devicechange', async () => {
+                await this.loadAudioSourceState();
                 const selectedId = this._callAudioInputId;
                 const generation = this._captureGeneration;
-                if (!this.isRecording || !selectedId || selectedId === 'default') return;
+                if (!this.isRecording || !selectedId || selectedId === 'default' || selectedId === 'system-audio-macos') return;
                 try {
                     const devices = await navigator.mediaDevices.enumerateDevices();
                     if (generation !== this._captureGeneration) return;
@@ -791,11 +950,25 @@ class MainWindowUI {
                     const s = Math.max(-1, Math.min(1, inputData[i]));
                     pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
                 }
+                if (event.outputBuffer) {
+                    for (let c = 0; c < event.outputBuffer.numberOfChannels; c++) {
+                        event.outputBuffer.getChannelData(c).fill(0);
+                    }
+                }
                 window.electronAPI.sendAudioChunk(pcm16.buffer);
             };
 
+            // Route through a muted gain node before connecting to destination.
+            // Chromium's ScriptProcessorNode needs a connection to destination to keep
+            // processing audio chunks, but routing it through a gain node with 0 volume
+            // guarantees that mic input is never played back to the speakers.
+            const gainNode = audioContext.createGain();
+            gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+            this._gainNode = gainNode;
+
             source.connect(scriptNode);
-            scriptNode.connect(audioContext.destination);
+            scriptNode.connect(gainNode);
+            gainNode.connect(audioContext.destination);
 
             logger.info('Renderer audio capture started', {
                 component: 'MainWindowUI',
@@ -825,6 +998,10 @@ class MainWindowUI {
                 this._scriptNode.disconnect();
                 this._scriptNode.onaudioprocess = null;
                 this._scriptNode = null;
+            }
+            if (this._gainNode) {
+                this._gainNode.disconnect();
+                this._gainNode = null;
             }
             if (this._mediaStream) {
                 this._mediaStream.getTracks().forEach((track) => track.stop());
@@ -929,6 +1106,7 @@ class MainWindowUI {
             this.hideSkillMenu();
         } else {
             this.hideShortcutsPopover();
+            this.hideAudioSourceMenu();
             this.skillMenu.classList.add('is-open');
             this.skillIndicator.setAttribute('aria-expanded', 'true');
             this.updateSkillMenuSelection();
@@ -941,6 +1119,168 @@ class MainWindowUI {
         this.skillMenu.classList.remove('is-open');
         this.skillIndicator.setAttribute('aria-expanded', 'false');
         this.resizeWindowToContent();
+    }
+
+    toggleAudioSourceMenu() {
+        if (!this.audioSourceMenu) return;
+        if (this.audioSourceMenu.classList.contains('is-open')) {
+            this.hideAudioSourceMenu();
+        } else {
+            this.hideSkillMenu();
+            this.hideShortcutsPopover();
+            this.renderAudioSourceOptions();
+            this.audioSourceMenu.classList.add('is-open');
+            if (this.audioSourceIndicator) {
+                this.audioSourceIndicator.setAttribute('aria-expanded', 'true');
+            }
+            this.resizeWindowToContent();
+        }
+    }
+
+    hideAudioSourceMenu() {
+        if (!this.audioSourceMenu || !this.audioSourceMenu.classList.contains('is-open')) return;
+        this.audioSourceMenu.classList.remove('is-open');
+        if (this.audioSourceIndicator) {
+            this.audioSourceIndicator.setAttribute('aria-expanded', 'false');
+        }
+        this.resizeWindowToContent();
+    }
+
+    async loadAudioSourceState() {
+        try {
+            if (window.electronAPI && window.electronAPI.getSettings) {
+                const settings = await window.electronAPI.getSettings();
+                if (settings && settings.callAudioInputId) {
+                    this._callAudioInputId = settings.callAudioInputId;
+                } else if (!this._callAudioInputId) {
+                    this._callAudioInputId = 'system-audio-macos';
+                }
+            }
+            if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                this.availableAudioDevices = devices.filter(d => d.kind === 'audioinput');
+            }
+            this.updateAudioSourceUI();
+            if (this.audioSourceMenu && this.audioSourceMenu.classList.contains('is-open')) {
+                this.renderAudioSourceOptions();
+            }
+        } catch (error) {
+            logger.warn('Failed to load audio source state', {
+                component: 'MainWindowUI',
+                error: error.message
+            });
+        }
+    }
+
+    updateAudioSourceUI() {
+        if (!this.audioSourceLabel || !this.audioSourceIcon) return;
+        const currentId = this._callAudioInputId || 'system-audio-macos';
+        if (currentId === 'system-audio-macos') {
+            this.audioSourceIcon.className = 'fas fa-volume-high';
+            this.audioSourceIcon.style.color = '#38bdf8';
+            this.audioSourceLabel.textContent = 'Sistema';
+            if (this.audioSourceIndicator) {
+                this.audioSourceIndicator.title = 'Fonte: Áudio do Sistema (Zoom, Meet, Teams, vídeos). Clique para alternar.';
+            }
+        } else if (currentId === 'default') {
+            this.audioSourceIcon.className = 'fas fa-microphone';
+            this.audioSourceIcon.style.color = '#a78bfa';
+            this.audioSourceLabel.textContent = 'Mic Padrão';
+            if (this.audioSourceIndicator) {
+                this.audioSourceIndicator.title = 'Fonte: Microfone padrão do sistema. Clique para alternar.';
+            }
+        } else {
+            const dev = this.availableAudioDevices.find(d => d.deviceId === currentId);
+            const name = dev?.label || 'Microfone';
+            const shortName = name.length > 12 ? name.substring(0, 10) + '…' : name;
+            this.audioSourceIcon.className = 'fas fa-microphone';
+            this.audioSourceIcon.style.color = '#a78bfa';
+            this.audioSourceLabel.textContent = shortName;
+            if (this.audioSourceIndicator) {
+                this.audioSourceIndicator.title = `Fonte: ${name}. Clique para alternar.`;
+            }
+        }
+    }
+
+    renderAudioSourceOptions() {
+        if (!this.audioSourceOptions) return;
+        this.audioSourceOptions.innerHTML = '';
+        const currentId = this._callAudioInputId || 'system-audio-macos';
+        const isMac = navigator.platform.toLowerCase().includes('mac');
+
+        const options = [];
+        if (isMac) {
+            options.push({
+                id: 'system-audio-macos',
+                icon: 'fas fa-volume-high',
+                iconColor: '#38bdf8',
+                name: 'Áudio do Sistema',
+                desc: 'Captura sons de chamadas (Zoom, Meet, Teams, etc.)'
+            });
+        }
+        options.push({
+            id: 'default',
+            icon: 'fas fa-microphone',
+            iconColor: '#a78bfa',
+            name: 'Microfone Padrão',
+            desc: 'Entrada de voz padrão do macOS'
+        });
+
+        this.availableAudioDevices.forEach((dev, idx) => {
+            if (dev.deviceId && dev.deviceId !== 'default') {
+                options.push({
+                    id: dev.deviceId,
+                    icon: 'fas fa-microphone',
+                    iconColor: '#a78bfa',
+                    name: dev.label || `Microfone ${idx + 1}`,
+                    desc: 'Microfone de dispositivo conectado'
+                });
+            }
+        });
+
+        options.forEach(opt => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'audio-source-item';
+            btn.setAttribute('role', 'menuitemradio');
+            const isChecked = opt.id === currentId;
+            btn.setAttribute('aria-checked', String(isChecked));
+            btn.innerHTML = `
+                <div class="audio-source-item-left">
+                    <i class="${opt.icon}" style="color: ${opt.iconColor};"></i>
+                    <div class="audio-source-item-info">
+                        <span class="audio-source-item-name">${opt.name}</span>
+                        <span class="audio-source-item-desc">${opt.desc}</span>
+                    </div>
+                </div>
+                <i class="fas fa-check checkmark"></i>
+            `;
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                await this.selectAudioSource(opt.id);
+            });
+            this.audioSourceOptions.appendChild(btn);
+        });
+    }
+
+    async selectAudioSource(newId) {
+        try {
+            this._callAudioInputId = newId;
+            this.updateAudioSourceUI();
+            this.hideAudioSourceMenu();
+            if (window.electronAPI && window.electronAPI.saveSettings) {
+                await window.electronAPI.saveSettings({ callAudioInputId: newId });
+            }
+            if (this.isRecording) {
+                this._startRendererAudioCapture();
+            }
+            logger.info('Selected audio source', { component: 'MainWindowUI', sourceId: newId });
+        } catch (error) {
+            logger.error('Failed to change audio source', {
+                component: 'MainWindowUI',
+                error: error.message
+            });
+        }
     }
 
     navigateSkill(direction) {

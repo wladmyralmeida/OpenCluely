@@ -374,8 +374,8 @@ class SpeechService extends EventEmitter {
     this.vadPreRollMs = 0;           // duration held in the pre-roll ring
     this.vadLastChunkAt = 0;         // timestamp of the last ingested chunk
     // Parallel transcription ordering state
-    this._transcribeSeq = 0;        // monotonic dispatch counter
-    this._nextEmitSeq = 0;          // next seq ready to surface to callers
+    this._transcribeSeq = 0;        // monotonic dispatch counter (1-based: ++this._transcribeSeq)
+    this._nextEmitSeq = 1;          // next seq ready to surface to callers (starts at 1)
     this._resultQueue = [];         // out-of-order results holding area
     this._inFlightCount = 0;        // number of concurrent transcriptions
     this._finalPendingResolve = null; // resolves the stop-barrier promise
@@ -1501,26 +1501,20 @@ class SpeechService extends EventEmitter {
         .then((transcript) => {
           const clean = (transcript || '').trim();
           if (clean && !this._isHallucinatedTranscript(clean)) {
-            this._resultQueue.push({ seq, text: clean, speaker: segmentSpeaker, source: segmentSource });
-            this._drainResultQueue();
+            logger.info('Transcription fragment accepted', { seq, text: clean, speaker: segmentSpeaker, source: segmentSource });
+            this._resultQueue.push({ seq, text: clean, speaker: segmentSpeaker, source: segmentSource, dropped: false });
           } else {
             if (clean) {
-              logger.debug('Dropped likely Whisper silence hallucination', { transcript: clean });
+              logger.info('Dropped likely Whisper silence hallucination', { seq, transcript: clean });
             }
-            // Advance the emit cursor so later results aren't blocked.
-            if (seq === this._nextEmitSeq) {
-              this._nextEmitSeq++;
-              this._drainResultQueue();
-            }
+            this._resultQueue.push({ seq, dropped: true });
           }
+          this._drainResultQueue();
         })
         .catch((err) => {
-          logger.error('Whisper segment transcription failed', { error: err.message });
-          // Advance cursor even on error to unblock the queue.
-          if (seq === this._nextEmitSeq) {
-            this._nextEmitSeq++;
-            this._drainResultQueue();
-          }
+          logger.error('Whisper segment transcription failed', { seq, error: err.message });
+          this._resultQueue.push({ seq, dropped: true });
+          this._drainResultQueue();
         })
         .finally(() => {
           this._inFlightCount--;
@@ -1540,9 +1534,11 @@ class SpeechService extends EventEmitter {
       this._resultQueue.length > 0 &&
       this._resultQueue[0].seq === this._nextEmitSeq
     ) {
-      const { text, speaker } = this._resultQueue.shift();
+      const item = this._resultQueue.shift();
       this._nextEmitSeq++;
-      this.emit('transcription', text, speaker || 'VOCÊ');
+      if (!item.dropped && item.text) {
+        this.emit('transcription', item.text, item.speaker || 'VOCÊ');
+      }
     }
   }
 
@@ -1625,7 +1621,8 @@ class SpeechService extends EventEmitter {
           model: result.model,
           device: result.device,
           gpu: result.gpu,
-          detectedLanguage: result.language
+          detectedLanguage: result.language,
+          text: result.text
         });
         return result.text || '';
       } catch (error) {

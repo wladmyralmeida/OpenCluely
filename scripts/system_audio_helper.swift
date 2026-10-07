@@ -36,14 +36,19 @@ final class SystemAudioHelper {
             if let first = input.first, let data = first.mData, first.mDataByteSize > 0 {
                 FileHandle.standardOutput.write(Data(bytes: data, count: Int(first.mDataByteSize)))
             }
-            for (index, source) in input.enumerated() where index < output.count {
-                guard let from = source.mData, let to = output[index].mData else { continue }
-                to.copyMemory(from: from, byteCount: Int(min(source.mDataByteSize, output[index].mDataByteSize)))
+            // Zero out output buffers so the aggregate device produces silence on
+            // the hardware output. The tapped audio is already playing through the
+            // system output from the source applications; re-copying it here caused
+            // a loud delayed echo.
+            for buffer in output {
+                if let data = buffer.mData, buffer.mDataByteSize > 0 {
+                    memset(data, 0, Int(buffer.mDataByteSize))
+                }
             }
         }, "creating audio callback")
         guard let ioProcID else { throw HelperError.operation("creating audio callback") }
         try check(AudioDeviceStart(aggregateID, ioProcID), "starting audio capture")
-        fputs("SYSTEM_AUDIO_FORMAT float32le 48000 1\n", stderr)
+        fputs("SYSTEM_AUDIO_FORMAT float32le 48000 2\n", stderr)
     }
 
     func stop() {

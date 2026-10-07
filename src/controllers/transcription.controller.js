@@ -579,8 +579,8 @@ class TranscriptionController {
   }
 
   getVoiceResponseTarget() {
-    const configured = String(process.env.WHISPER_RESPONSE_TARGET || 'both').trim().toLowerCase();
-    return ['chat', 'overlay', 'both'].includes(configured) ? configured : 'both';
+    const configured = String(process.env.WHISPER_RESPONSE_TARGET || 'chat').trim().toLowerCase();
+    return ['chat', 'overlay', 'both'].includes(configured) ? configured : 'chat';
   }
 
   shouldShowVoiceOverlay() {

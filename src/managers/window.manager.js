@@ -38,8 +38,8 @@ class WindowManager {
     
     this.windowConfigs = {
       main: {
-        width: 520,
-        height: 35,
+        width: 980,
+        height: 52,
         useContentSize: true,
         file: 'index.html',
         title: 'OpenCluely'
@@ -347,11 +347,11 @@ class WindowManager {
         titleBarOverlay: false,
         transparent: true,
         backgroundColor: '#00000000',
-  // Allow resizing so users can adjust width; we will lock height in handlers
-  resizable: true,
-    // Keep the original max width as cap; allow small min width so it can collapse to one icon
-    minWidth: 60,
-    maxWidth: this.windowConfigs.main.width,
+        resizable: true,
+        minWidth: 80,
+        maxWidth: 2400,
+        minHeight: 44,
+        maxHeight: 650,
         minimizable: false,
         maximizable: false,
         closable: false,

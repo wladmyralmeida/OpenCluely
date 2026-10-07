@@ -96,16 +96,19 @@ class SystemAudioService extends EventEmitter {
 
   _handleFloat32(data) {
     const source = this.pending.length ? Buffer.concat([this.pending, data]) : data;
-    const length = source.length - (source.length % 4);
+    // CoreAudio system tap provides 48 kHz stereo (2 channels) float32 PCM (8 bytes per frame).
+    const frameBytes = 8;
+    const length = source.length - (source.length % frameBytes);
     this.pending = source.subarray(length);
-    const output = Buffer.allocUnsafe(Math.ceil(length / 12) * 2);
+    // Downsample 48 kHz stereo to 16 kHz mono (decimate by 3, mix Left + Right)
+    const output = Buffer.allocUnsafe(Math.ceil(length / (frameBytes * 3)) * 2);
     let written = 0;
-    // The helper supplies 48 kHz mono float PCM. Downsample to 16 kHz PCM16,
-    // the format consumed by the existing Whisper VAD pipeline.
-    for (let offset = 0; offset < length; offset += 4) {
+    for (let offset = 0; offset < length; offset += frameBytes) {
       if (this.samplePhase++ % 3) continue;
-      const value = Math.max(-1, Math.min(1, source.readFloatLE(offset)));
-      output.writeInt16LE(value < 0 ? Math.round(value * 0x8000) : Math.round(value * 0x7fff), written);
+      const left = source.readFloatLE(offset);
+      const right = source.readFloatLE(offset + 4);
+      const mono = Math.max(-1, Math.min(1, (left + right) * 0.5));
+      output.writeInt16LE(mono < 0 ? Math.round(mono * 0x8000) : Math.round(mono * 0x7fff), written);
       written += 2;
     }
     if (written) this.emit('audio', output.subarray(0, written));
