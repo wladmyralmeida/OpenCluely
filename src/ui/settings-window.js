@@ -26,6 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const windowGapInput = document.getElementById('windowGap');
     const codingLanguageSelect = document.getElementById('codingLanguage');
     const activeSkillSelect = document.getElementById('activeSkill');
+    const translateToPortugueseSelect = document.getElementById('translateToPortuguese');
     const iconGrid = document.getElementById('iconGrid');
 
     // Check if window.api exists
@@ -221,6 +222,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (settings.activeSkill && activeSkillSelect) activeSkillSelect.value = settings.activeSkill;
+        if (translateToPortugueseSelect && settings.translateToPortuguese !== undefined) {
+            translateToPortugueseSelect.value = String(settings.translateToPortuguese);
+        }
 
         // Handle icon selection
         const selectedIcon = settings.selectedIcon || settings.appIcon;
@@ -290,6 +294,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (windowGapInput) settings.windowGap = windowGapInput.value;
         if (codingLanguageSelect) settings.codingLanguage = codingLanguageSelect.value;
         if (activeSkillSelect) settings.activeSkill = activeSkillSelect.value;
+        if (translateToPortugueseSelect) settings.translateToPortuguese = translateToPortugueseSelect.value === 'true';
         
         window.api.send('save-settings', settings);
     };
@@ -338,6 +343,7 @@ document.addEventListener('DOMContentLoaded', () => {
         whisperResponseTargetSelect,
         whisperSegmentMsInput,
         geminiKeyInput,
+        translateToPortugueseSelect,
         windowGapInput
     ];
 

@@ -1447,7 +1447,8 @@ Remember: Be intelligent about filtering - provide quick, direct responses so th
   }
 
   /**
-   * Fast translation of transcription text to Brazilian Portuguese
+   * Fast translation of transcription text to Brazilian Portuguese.
+   * Uses direct Node HTTPS request to avoid Electron Undici fetch issues.
    * @param {string} text - Source text
    * @returns {Promise<string>} Translated text in Portuguese
    */
@@ -1456,30 +1457,58 @@ Remember: Be intelligent about filtering - provide quick, direct responses so th
     const cleanText = text.trim();
     const apiKey = config.getApiKey('GEMINI');
 
-    if (!this.client || !apiKey || apiKey === 'your-api-key-here') {
+    if (!apiKey || apiKey === 'your-api-key-here') {
+      logger.warn('Cannot translate to Portuguese: Gemini API key not available', {
+        keyConfigured: !!apiKey && apiKey !== 'your-api-key-here'
+      });
       return cleanText;
     }
 
-    try {
-      const prompt = `Translate the following speech transcription into natural Brazilian Portuguese. Return ONLY the translated Portuguese text without any intro, commentary, or quotation marks:\n\n${cleanText}`;
-      
-      const configObj = this.getGenerationConfig({
+    const primaryModel = this.model || config.get('llm.gemini.model') || 'gemini-3.1-flash-lite';
+    const fallbackModels = config.get('llm.gemini.fallbackModels') || ['gemini-3.5-flash-lite', 'gemini-3.5-flash'];
+    const modelsToTry = [primaryModel, ...fallbackModels.filter(m => m !== primaryModel)];
+
+    const prompt = `Translate the following speech transcription into natural Brazilian Portuguese. Return ONLY the translated Portuguese text without any intro, commentary, or quotation marks:\n\n${cleanText}`;
+    const geminiRequest = {
+      contents: [{
+        parts: [{ text: prompt }]
+      }],
+      generationConfig: {
         temperature: 0.1,
         maxOutputTokens: 256
-      });
+      }
+    };
 
-      const result = await this.client.models.generateContent({
-        model: this.model,
-        contents: prompt,
-        config: configObj
-      });
-
-      const { text: translated } = this.extractTextFromCandidates(result);
-      return (translated || cleanText).trim();
-    } catch (err) {
-      logger.warn('Failed to translate transcription to Portuguese', { error: err.message });
-      return cleanText;
+    // Primary: direct native HTTPS request (bypasses Electron fetch socket issues)
+    for (const modelName of modelsToTry) {
+      try {
+        const translated = await this._executeAlternativeRequestForModel(geminiRequest, modelName, apiKey);
+        if (translated && translated.trim()) {
+          return translated.trim();
+        }
+      } catch (err) {
+        logger.warn(`Failed to translate transcription to Portuguese via HTTPS for model ${modelName}`, { error: err.message });
+      }
     }
+
+    // Secondary fallback: SDK client if initialized
+    if (this.client) {
+      for (const modelName of modelsToTry) {
+        try {
+          const result = await this.client.models.generateContent({
+            model: modelName,
+            contents: prompt,
+            config: this.getGenerationConfig({ temperature: 0.1, maxOutputTokens: 256 })
+          });
+          const { text: translated } = this.extractTextFromCandidates(result);
+          if (translated && translated.trim()) {
+            return translated.trim();
+          }
+        } catch (_) {}
+      }
+    }
+
+    return cleanText;
   }
 
   /**

@@ -924,11 +924,13 @@ class ApplicationController {
 
     // Transcription translation toggle handlers
     ipcMain.handle("set-transcription-translation", (event, enabled) => {
-      return this.transcriptionController.setTranslationEnabled(enabled);
+      const state = this.transcriptionController.setTranslationEnabled(enabled);
+      return { enabled: state };
     });
 
     ipcMain.handle("get-transcription-translation-status", () => {
-      return this.transcriptionController.isTranslationEnabled();
+      const state = this.transcriptionController.isTranslationEnabled();
+      return { enabled: state };
     });
 
     // Window binding IPC handlers
@@ -1402,6 +1404,7 @@ class ApplicationController {
       callAudioInputId: process.env.CALL_AUDIO_INPUT_ID || "default",
       micAudioInputId: process.env.MIC_AUDIO_INPUT_ID || "off",
       geminiKey: process.env.GEMINI_API_KEY || "",
+      translateToPortuguese: this.transcriptionController ? this.transcriptionController.isTranslationEnabled() : false,
 
       azureConfigured: !!process.env.AZURE_SPEECH_KEY && !!process.env.AZURE_SPEECH_REGION,
       speechAvailable: this.speechAvailable
@@ -1411,6 +1414,11 @@ class ApplicationController {
   saveSettings(settings) {
     try {
       // ── In-memory updates + window broadcasts ──
+      if (settings.translateToPortuguese !== undefined && this.transcriptionController) {
+        const enabled = settings.translateToPortuguese === true || settings.translateToPortuguese === 'true';
+        this.transcriptionController.setTranslationEnabled(enabled);
+        windowManager.broadcastToAllWindows("transcription-translation-changed", { enabled });
+      }
       if (settings.codingLanguage) {
         this.codingLanguage = settings.codingLanguage;
         windowManager.broadcastToAllWindows("coding-language-changed", {

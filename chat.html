@@ -1392,8 +1392,8 @@
           <button class="icon-button" id="exportChatBtn" title="Exportar Reunião & Mensagens (PDF, Checklist, Notion, Mensagens)" style="font-size: 11px; padding: 4px 8px; display: inline-flex; align-items: center; gap: 4px;">
             <i class="fas fa-file-export"></i> <span style="font-size: 10px; font-weight: 600;">Exportar</span>
           </button>
-          <button class="icon-button" id="translateToggleBtn" title="Traduzir transcrição para Português (Lado a Lado)" style="font-size: 11px; padding: 4px 8px; display: inline-flex; align-items: center; gap: 4px;">
-            <i class="fas fa-language"></i> <span id="translateToggleLabel" style="font-size: 10px; font-weight: 600;">PT: OFF</span>
+          <button class="icon-button active" id="translateToggleBtn" title="Traduzir transcrição para Português (Lado a Lado)" style="font-size: 11px; padding: 4px 8px; display: inline-flex; align-items: center; gap: 4px;">
+            <i class="fas fa-language"></i> <span id="translateToggleLabel" style="font-size: 10px; font-weight: 600;">PT: ON</span>
           </button>
           <button class="icon-button" id="chatSettingsBtn" title="Configurações (Áudio, Modelo, Atalhos)" style="font-size: 11px; padding: 4px 8px; display: inline-flex; align-items: center; gap: 4px;">
             <i class="fas fa-gear"></i>
@@ -2502,21 +2502,47 @@
         }
       }
 
+      function resolveTranslationState(res, fallback) {
+        if (typeof res === 'boolean') return res;
+        if (res && typeof res.enabled === 'boolean') return res.enabled;
+        return fallback;
+      }
+
       if (translateToggleBtn && whysperAPI && whysperAPI.setTranscriptionTranslation) {
+        // Restore saved preference if present (defaults to ON)
+        try {
+          const savedPref = localStorage.getItem('opencluely_translate_pt');
+          const shouldEnable = savedPref !== null ? savedPref === 'true' : true;
+          whysperAPI.setTranscriptionTranslation(shouldEnable).then(res => {
+            updateTranslationBtnUI(resolveTranslationState(res, shouldEnable));
+          }).catch(console.error);
+        } catch (e) {
+          console.warn('Failed restoring translation preference:', e);
+        }
+
         translateToggleBtn.addEventListener('click', async () => {
           try {
             const nextState = !isTranslationEnabled;
             const res = await whysperAPI.setTranscriptionTranslation(nextState);
-            updateTranslationBtnUI(res ? res.enabled : nextState);
+            const enabled = resolveTranslationState(res, nextState);
+            updateTranslationBtnUI(enabled);
+            try {
+              localStorage.setItem('opencluely_translate_pt', enabled ? 'true' : 'false');
+            } catch (_) {}
           } catch (e) {
             console.error('Failed to toggle translation:', e);
           }
         });
 
-        if (whysperAPI.getTranscriptionTranslationStatus) {
-          whysperAPI.getTranscriptionTranslationStatus().then(res => {
-            if (res) updateTranslationBtnUI(res.enabled);
-          }).catch(console.error);
+        if (whysperAPI.onTranscriptionTranslationChanged) {
+          whysperAPI.onTranscriptionTranslationChanged((event, data) => {
+            if (data && typeof data.enabled === 'boolean') {
+              updateTranslationBtnUI(data.enabled);
+              try {
+                localStorage.setItem('opencluely_translate_pt', data.enabled ? 'true' : 'false');
+              } catch (_) {}
+            }
+          });
         }
       }
 

@@ -15,7 +15,7 @@ class TranscriptionController {
     this.utteranceDispatchInFlight = false;
     this.utteranceCoalesceMs = 150;
     this.responseSeq = 0;
-    this.translateToPortuguese = false;
+    this.translateToPortuguese = process.env.TRANSLATE_TO_PORTUGUESE !== 'false';
   }
 
   setTranslationEnabled(enabled) {
@@ -89,7 +89,13 @@ class TranscriptionController {
     let translationPT = null;
     if (this.translateToPortuguese) {
       try {
-        translationPT = await this.llmService.translateToPortuguese(fragment);
+        const translated = await this.llmService.translateToPortuguese(fragment);
+        if (translated && typeof translated === 'string' && translated.trim()) {
+          // Only use if actually translated, not identical fallback
+          if (translated.trim().toLowerCase() !== fragment.trim().toLowerCase()) {
+            translationPT = translated.trim();
+          }
+        }
       } catch (err) {
         logger.warn('Failed to translate transcription fragment', { error: err.message });
       }

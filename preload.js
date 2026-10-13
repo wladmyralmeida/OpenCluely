@@ -135,6 +135,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onTranscriptSaved: (callback) => ipcRenderer.on('transcript-saved', callback),
   onTranscriptSummaryReady: (callback) => ipcRenderer.on('transcript-summary-ready', callback),
   onCodingLanguageChanged: (callback) => ipcRenderer.on('coding-language-changed', callback),
+  onTranscriptionTranslationChanged: (callback) => ipcRenderer.on('transcription-translation-changed', callback),
   onAudioInputSettingsChanged: (callback) => ipcRenderer.on('audio-input-settings-changed', callback),
   onMainWindowShown: (callback) => ipcRenderer.on('main-window-shown', callback),
   
