@@ -15,6 +15,19 @@ class LLMService {
     this.errorCount = 0;
     this._interviewContext = null;
 
+    // Multi-LLM provider statistics and circuit breaker state
+    this.providerStats = {
+      gemini: { requests: 0, successes: 0, failures: 0 },
+      openrouter: { requests: 0, successes: 0, failures: 0 },
+      ollama: { requests: 0, successes: 0, failures: 0 }
+    };
+    this.circuitBreaker = {
+      geminiFailures: 0,
+      geminiTrippedUntil: 0,
+      tripThreshold: 2,
+      resetTimeoutMs: 45000 // 45s before attempting Gemini again
+    };
+
     this.initializeClient();
   }
 
@@ -25,11 +38,7 @@ class LLMService {
    * files are fine — interview mode just falls back to generic answers.
    * Cached after first read since these don't change mid-session.
    */
-  _loadInterviewContext() {
-    if (this._interviewContext !== null) {
-      return this._interviewContext;
-    }
-
+  _loadInterviewContext(queryText = '') {
     const readIfExists = (fileName) => {
       try {
         const filePath = path.join(__dirname, '..', '..', fileName);
@@ -39,46 +48,62 @@ class LLMService {
       }
     };
 
-    const profile = readIfExists('candidate-profile.md');
-    const jobDescription = readIfExists('job-description.md');
+    let staticContext = this._interviewContext;
+    if (staticContext === null) {
+      const profile = readIfExists('candidate-profile.md');
+      const jobDescription = readIfExists('job-description.md');
 
-    let context = '';
-    if (profile) {
-      context += `\n\n## Candidate background (use these real experiences when relevant instead of generic answers):\n\n${profile}`;
-    }
-    if (jobDescription) {
-      context += `\n\n## The role being interviewed for (tailor answers toward this when relevant):\n\n${jobDescription}`;
+      let context = '';
+      if (profile) {
+        context += `\n\n## Candidate background (use these real experiences when relevant instead of generic answers):\n\n${profile}`;
+      }
+      if (jobDescription) {
+        context += `\n\n## The role being interviewed for (tailor answers toward this when relevant):\n\n${jobDescription}`;
+      }
+      this._interviewContext = context;
+      staticContext = context;
     }
 
-    this._interviewContext = context;
-    return context;
+    let dynamicStarContext = '';
+    try {
+      const knowledgeRagManager = require('../managers/knowledge-rag.manager');
+      if (queryText && typeof knowledgeRagManager.formatPromptInjection === 'function') {
+        dynamicStarContext = knowledgeRagManager.formatPromptInjection(queryText);
+      }
+    } catch (_) {}
+
+    return `${staticContext}${dynamicStarContext ? `\n${dynamicStarContext}` : ''}`;
   }
 
   initializeClient() {
     const apiKey = config.getApiKey('GEMINI');
     
-    if (!apiKey || apiKey === 'your-api-key-here') {
-      logger.warn('Gemini API key not configured', { 
-        keyExists: !!apiKey,
-        isPlaceholder: apiKey === 'your-api-key-here'
-      });
-      return;
+    if (apiKey && apiKey !== 'your-api-key-here') {
+      try {
+        this.client = new GoogleGenAI({ apiKey });
+        this.model = config.get('llm.gemini.model');
+        this.isInitialized = true;
+        logger.info('Gemini AI client initialized successfully', { model: this.model });
+      } catch (error) {
+        logger.error('Failed to initialize Gemini client', { error: error.message });
+      }
+    } else {
+      logger.info('Gemini API key not configured or placeholder, checking alternative LLM providers...');
     }
 
-    try {
-      this.client = new GoogleGenAI({ apiKey });
-      
-      // Use the configured model name (default: gemini-3.5-flash)
-      this.model = config.get('llm.gemini.model');
+    const hasOpenRouter = !!(config.getApiKey('OPENROUTER') || process.env.OPENROUTER_API_KEY) && (config.getApiKey('OPENROUTER') !== 'your-openrouter-key');
+    const hasOllama = !!config.get('llm.ollama.baseUrl');
+
+    if (this.isInitialized || hasOpenRouter || hasOllama) {
       this.isInitialized = true;
-      
-      logger.info('Gemini AI client initialized successfully', {
-        model: this.model
+      logger.info('LLM service ready', {
+        providerMode: config.get('llm.providerMode', 'auto_failover'),
+        hasGemini: !!this.client,
+        hasOpenRouter,
+        hasOllama
       });
-    } catch (error) {
-      logger.error('Failed to initialize Gemini client', { 
-        error: error.message 
-      });
+    } else {
+      logger.warn('No LLM providers available (Gemini, OpenRouter, or Ollama).');
     }
   }
 
@@ -850,7 +875,7 @@ You are helping a candidate answer questions a recruiter/interviewer is asking o
 - Behavioral/experience question: short, concrete, situation-action-result answer grounded in the candidate's real history below.
 - Small talk or yes/no: one or two natural sentences.
 
-Tone: confident, concise, conversational — a well-prepared candidate thinking out loud, not a textbook.${this._loadInterviewContext()}`;
+Tone: confident, concise, conversational — a well-prepared candidate thinking out loud, not a textbook.${this._loadInterviewContext(text)}`;
     }
 
     let prompt = `# Intelligent Transcription Response System
@@ -894,38 +919,363 @@ Remember: Be intelligent about filtering - provide quick, direct responses so th
     return `Context: ${activeSkill.toUpperCase()} analysis request\n\nText to analyze:\n${text}`;
   }
 
-  async executeRequest(geminiRequest) {
-    const maxRetries = config.get('llm.gemini.maxRetries');
-    const timeout = config.get('llm.gemini.timeout');
+  isAnyProviderAvailable() {
+    const hasGemini = !!this.client && !!config.getApiKey('GEMINI') && config.getApiKey('GEMINI') !== 'your-api-key-here';
+    const orKey = config.getApiKey('OPENROUTER') || process.env.OPENROUTER_API_KEY;
+    const hasOpenRouter = !!orKey && orKey !== 'your-openrouter-key';
+    const hasOllama = !!config.get('llm.ollama.baseUrl');
+    return hasGemini || hasOpenRouter || hasOllama;
+  }
+
+  convertGeminiRequestToOpenAIMessages(geminiRequest) {
+    const messages = [];
+
+    // System instruction
+    if (geminiRequest && geminiRequest.systemInstruction) {
+      let sysText = '';
+      if (typeof geminiRequest.systemInstruction === 'string') {
+        sysText = geminiRequest.systemInstruction;
+      } else if (geminiRequest.systemInstruction.parts && Array.isArray(geminiRequest.systemInstruction.parts)) {
+        sysText = geminiRequest.systemInstruction.parts.map(p => (p && typeof p.text === 'string' ? p.text : '')).join('\n');
+      }
+      if (sysText.trim()) {
+        messages.push({ role: 'system', content: sysText.trim() });
+      }
+    }
+
+    // Contents
+    if (geminiRequest && Array.isArray(geminiRequest.contents)) {
+      geminiRequest.contents.forEach(item => {
+        if (!item) return;
+        const role = item.role === 'model' || item.role === 'assistant' ? 'assistant' : 'user';
+        let contentText = '';
+        if (typeof item === 'string') {
+          contentText = item;
+        } else if (Array.isArray(item.parts)) {
+          contentText = item.parts.map(p => (p && typeof p.text === 'string' ? p.text : '')).join('\n');
+        } else if (item.parts && typeof item.parts === 'string') {
+          contentText = item.parts;
+        } else if (item.text) {
+          contentText = item.text;
+        }
+        if (contentText.trim()) {
+          messages.push({ role, content: contentText.trim() });
+        }
+      });
+    }
+
+    if (messages.length === 0) {
+      messages.push({ role: 'user', content: 'Olá' });
+    }
+
+    return messages;
+  }
+
+  async executeOpenRouterRequest(geminiRequest, modelOverride = null) {
+    const apiKey = config.getApiKey('OPENROUTER') || process.env.OPENROUTER_API_KEY;
+    if (!apiKey || apiKey === 'your-openrouter-key') {
+      throw new Error('Chave da API do OpenRouter não configurada.');
+    }
+
+    const messages = this.convertGeminiRequestToOpenAIMessages(geminiRequest);
+    const model = modelOverride || config.get('llm.openrouter.model', 'deepseek/deepseek-r1:free');
+    const maxTokens = (geminiRequest.generationConfig && geminiRequest.generationConfig.maxOutputTokens) || 2048;
+    const temperature = (geminiRequest.generationConfig && geminiRequest.generationConfig.temperature) || 0.7;
+    const timeout = config.get('llm.openrouter.timeout', 25000);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+    this.providerStats.openrouter.requests++;
+    try {
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'HTTP-Referer': config.get('llm.openrouter.siteUrl', 'https://github.com/TechyCSR/OpenCluely'),
+          'X-Title': config.get('llm.openrouter.siteName', 'OpenCluely'),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model,
+          messages,
+          temperature,
+          max_tokens: maxTokens,
+          stream: false
+        }),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`OpenRouter HTTP ${response.status}: ${errText.slice(0, 200)}`);
+      }
+
+      const json = await response.json();
+      const choice = json.choices && json.choices[0];
+      const answer = (choice && choice.message && choice.message.content) || '';
+      if (!answer) {
+        throw new Error('Resposta vazia recebida do OpenRouter');
+      }
+
+      this.providerStats.openrouter.successes++;
+      logger.info('OpenRouter request succeeded', { model, length: answer.length });
+      return answer.trim();
+    } catch (err) {
+      clearTimeout(timeoutId);
+      this.providerStats.openrouter.failures++;
+      throw err;
+    }
+  }
+
+  async executeOpenRouterStreamRequest(geminiRequest, onDelta, modelOverride = null) {
+    const apiKey = config.getApiKey('OPENROUTER') || process.env.OPENROUTER_API_KEY;
+    if (!apiKey || apiKey === 'your-openrouter-key') {
+      throw new Error('Chave da API do OpenRouter não configurada.');
+    }
+
+    const messages = this.convertGeminiRequestToOpenAIMessages(geminiRequest);
+    const model = modelOverride || config.get('llm.openrouter.model', 'deepseek/deepseek-r1:free');
+    const maxTokens = (geminiRequest.generationConfig && geminiRequest.generationConfig.maxOutputTokens) || 2048;
+    const temperature = (geminiRequest.generationConfig && geminiRequest.generationConfig.temperature) || 0.7;
+    const timeout = config.get('llm.openrouter.timeout', 25000);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+    this.providerStats.openrouter.requests++;
+    let accumulatedText = '';
+    try {
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'HTTP-Referer': config.get('llm.openrouter.siteUrl', 'https://github.com/TechyCSR/OpenCluely'),
+          'X-Title': config.get('llm.openrouter.siteName', 'OpenCluely'),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model,
+          messages,
+          temperature,
+          max_tokens: maxTokens,
+          stream: true
+        }),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`OpenRouter streaming HTTP ${response.status}: ${errText.slice(0, 200)}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (trimmed.startsWith('data: ')) {
+            const dataStr = trimmed.slice(6).trim();
+            if (dataStr === '[DONE]') break;
+            try {
+              const parsed = JSON.parse(dataStr);
+              const delta = parsed.choices?.[0]?.delta?.content || '';
+              if (delta) {
+                accumulatedText += delta;
+                if (typeof onDelta === 'function') onDelta(delta);
+              }
+            } catch (_) {}
+          }
+        }
+      }
+
+      if (!accumulatedText.trim()) {
+        throw new Error('Resposta vazia de streaming recebida do OpenRouter');
+      }
+
+      this.providerStats.openrouter.successes++;
+      logger.info('OpenRouter streaming succeeded', { model, length: accumulatedText.length });
+      return accumulatedText.trim();
+    } catch (err) {
+      clearTimeout(timeoutId);
+      this.providerStats.openrouter.failures++;
+      throw err;
+    }
+  }
+
+  async executeOpenRouterWithFallback(geminiRequest) {
+    const primaryModel = config.get('llm.openrouter.model', 'deepseek/deepseek-r1:free');
+    const fallbackModels = config.get('llm.openrouter.fallbackModels', [
+      'meta-llama/llama-3.3-70b-instruct:free',
+      'qwen/qwen-2.5-coder-32b-instruct:free',
+      'google/gemini-2.0-flash-exp:free'
+    ]);
+    const modelsToTry = [primaryModel, ...fallbackModels.filter(m => m !== primaryModel)];
+
+    let lastErr = null;
+    for (const m of modelsToTry) {
+      try {
+        return await this.executeOpenRouterRequest(geminiRequest, m);
+      } catch (err) {
+        lastErr = err;
+        logger.warn(`OpenRouter model ${m} failed, trying next fallback model...`, { error: err.message });
+      }
+    }
+    throw lastErr || new Error('All OpenRouter models failed');
+  }
+
+  async executeOpenRouterStreamWithFallback(geminiRequest, onDelta) {
+    const primaryModel = config.get('llm.openrouter.model', 'deepseek/deepseek-r1:free');
+    const fallbackModels = config.get('llm.openrouter.fallbackModels', [
+      'meta-llama/llama-3.3-70b-instruct:free',
+      'qwen/qwen-2.5-coder-32b-instruct:free',
+      'google/gemini-2.0-flash-exp:free'
+    ]);
+    const modelsToTry = [primaryModel, ...fallbackModels.filter(m => m !== primaryModel)];
+
+    let lastErr = null;
+    for (const m of modelsToTry) {
+      try {
+        return await this.executeOpenRouterStreamRequest(geminiRequest, onDelta, m);
+      } catch (err) {
+        lastErr = err;
+        logger.warn(`OpenRouter streaming model ${m} failed, trying next fallback model...`, { error: err.message });
+      }
+    }
+    throw lastErr || new Error('All OpenRouter streaming models failed');
+  }
+
+  async executeOllamaRequest(geminiRequest, modelOverride = null) {
+    const baseUrl = config.get('llm.ollama.baseUrl', 'http://localhost:11434');
+    const model = modelOverride || config.get('llm.ollama.model', 'llama3.2:3b');
+    const messages = this.convertGeminiRequestToOpenAIMessages(geminiRequest);
+
+    const controller = new AbortController();
+    const timeout = config.get('llm.ollama.timeout', 20000);
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+    this.providerStats.ollama.requests++;
+    try {
+      const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model,
+          messages,
+          stream: false
+        }),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+      if (!response.ok) {
+        throw new Error(`Ollama HTTP ${response.status}`);
+      }
+
+      const json = await response.json();
+      const text = json.choices?.[0]?.message?.content || '';
+      if (!text) throw new Error('Empty response from Ollama');
+
+      this.providerStats.ollama.successes++;
+      logger.info('Ollama request succeeded', { model, length: text.length });
+      return text.trim();
+    } catch (err) {
+      clearTimeout(timeoutId);
+      this.providerStats.ollama.failures++;
+      throw err;
+    }
+  }
+
+  async executeOllamaStreamRequest(geminiRequest, onDelta, modelOverride = null) {
+    const baseUrl = config.get('llm.ollama.baseUrl', 'http://localhost:11434');
+    const model = modelOverride || config.get('llm.ollama.model', 'llama3.2:3b');
+    const messages = this.convertGeminiRequestToOpenAIMessages(geminiRequest);
+
+    const controller = new AbortController();
+    const timeout = config.get('llm.ollama.timeout', 20000);
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+    this.providerStats.ollama.requests++;
+    let accumulatedText = '';
+    try {
+      const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model,
+          messages,
+          stream: true
+        }),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+      if (!response.ok) throw new Error(`Ollama HTTP ${response.status}`);
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (trimmed.startsWith('data: ')) {
+            const dataStr = trimmed.slice(6).trim();
+            if (dataStr === '[DONE]') break;
+            try {
+              const parsed = JSON.parse(dataStr);
+              const delta = parsed.choices?.[0]?.delta?.content || '';
+              if (delta) {
+                accumulatedText += delta;
+                if (typeof onDelta === 'function') onDelta(delta);
+              }
+            } catch (_) {}
+          }
+        }
+      }
+
+      if (!accumulatedText.trim()) throw new Error('Empty streamed response from Ollama');
+      this.providerStats.ollama.successes++;
+      return accumulatedText.trim();
+    } catch (err) {
+      clearTimeout(timeoutId);
+      this.providerStats.ollama.failures++;
+      throw err;
+    }
+  }
+
+  async executeGeminiRequest(geminiRequest, timeoutOverride = null) {
+    const maxRetries = config.get('llm.gemini.maxRetries', 2);
+    const timeout = timeoutOverride || config.get('llm.gemini.timeout', 30000);
     const primaryModel = this.model;
     const fallbackModels = config.get('llm.gemini.fallbackModels') || [];
     const modelsToTry = [primaryModel, ...fallbackModels];
 
-    logger.debug('Executing Gemini request', {
-      hasModel: !!this.model,
-      hasClient: !!this.client,
-      requestKeys: Object.keys(geminiRequest),
-      timeout,
-      maxRetries,
-      modelsToTry,
-      nodeVersion: process.version,
-      platform: process.platform
-    });
-
     let lastError = null;
-
     for (const modelName of modelsToTry) {
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
           const timeoutPromise = new Promise((_, reject) =>
             setTimeout(() => reject(new Error('Request timeout')), timeout)
           );
-
-          logger.debug(`Gemini API attempt ${attempt} starting with model ${modelName}`, {
-            timestamp: new Date().toISOString(),
-            timeout,
-            model: modelName
-          });
 
           const requestPromise = this.client.models.generateContent({
             model: modelName,
@@ -939,106 +1289,94 @@ Remember: Be intelligent about filtering - provide quick, direct responses so th
             throw new Error('Empty response from Gemini API');
           }
 
-          const { text, finishReason } = this.extractTextFromCandidates(result);
-
-          if (finishReason === 'MAX_TOKENS') {
-            logger.warn('Gemini response reached max tokens limit', {
-              attempt,
-              finishReason,
-              model: modelName
-            });
-          }
-
-          logger.debug('Gemini API request successful', {
-            attempt,
-            model: modelName,
-            responseLength: text.length,
-            finishReason
-          });
-
+          const { text } = this.extractTextFromCandidates(result);
           return text;
         } catch (error) {
-          const errorInfo = this.analyzeError(error);
           lastError = error;
-
-          // Enhanced error logging for fetch failures
-          if (errorInfo.type === 'NETWORK_ERROR') {
-            logger.error('Network error details', {
-              attempt,
-              model: modelName,
-              errorMessage: error.message,
-              errorStack: error.stack,
-              errorName: error.name,
-              nodeEnv: process.env.NODE_ENV,
-              electronVersion: process.versions.electron,
-              chromeVersion: process.versions.chrome,
-              nodeVersion: process.versions.node,
-              userAgent: this.getUserAgent()
-            });
-          }
-
-          logger.warn(`Gemini API attempt ${attempt} failed for model ${modelName}`, {
-            error: error.message,
-            errorType: errorInfo.type,
-            isNetworkError: errorInfo.isNetworkError,
-            suggestedAction: errorInfo.suggestedAction,
-            remainingAttempts: maxRetries - attempt,
-            model: modelName
-          });
-
-          // Non-retryable auth errors fail immediately
-          if (errorInfo.type === 'AUTH_ERROR') {
-            logger.error(`Authentication error with Gemini API for model ${modelName} — will not retry`, {
-              error: error.message
-            });
-            break;
-          }
-
-          // For model-unavailable / overloaded / rate-limit / retired-model
-          // errors, move to the next fallback model immediately instead of
-          // burning all retries — a 404 "no longer available" will never
-          // succeed no matter how many times we retry the same model.
-          const isModelUnavailable = errorInfo.type === 'RATE_LIMIT_ERROR' ||
+          const isRateOrUnavailable = error.message.includes('429') ||
             error.message.includes('503') ||
-            error.message.includes('UNAVAILABLE') ||
-            error.message.includes('high demand') ||
-            error.message.includes('404') ||
-            error.message.includes('NOT_FOUND') ||
-            error.message.includes('no longer available');
-
-          if (isModelUnavailable && modelName !== modelsToTry[modelsToTry.length - 1]) {
-            logger.info(`Switching to fallback model after ${modelName} unavailable`, {
-              model: modelName,
-              error: error.message
-            });
-            break; // exit retry loop for this model and try next model
+            error.message.includes('quota') ||
+            error.message.includes('high demand');
+          if (isRateOrUnavailable) {
+            break; // try next model immediately
           }
-
-          if (attempt === maxRetries) {
-            break; // exit retry loop for this model and try next model
-          }
-
-          // Use exponential backoff (500ms -> 1000ms -> 2000ms) with jitter
-          const baseDelay = errorInfo.isNetworkError ? 800 : 500;
-          const delay = this._computeRetryDelay(attempt, baseDelay);
-
-          logger.debug(`Waiting ${Math.round(delay)}ms before retry ${attempt + 1}`, {
-            attempt,
-            delayMs: Math.round(delay),
-            isNetworkError: errorInfo.isNetworkError,
-            model: modelName
-          });
-
-          await this.delay(delay);
         }
       }
     }
+    throw lastError || new Error('Gemini request failed');
+  }
 
-    const finalErrorInfo = this.analyzeError(lastError);
-    const finalError = new Error(`Gemini API failed after trying ${modelsToTry.join(', ')}: ${lastError?.message}`);
-    finalError.errorAnalysis = finalErrorInfo;
-    finalError.originalError = lastError;
-    throw finalError;
+  async executeRequest(geminiRequest) {
+    const providerMode = config.get('llm.providerMode', 'auto_failover');
+
+    // 1. Explicit OpenRouter Mode (Free or Paid)
+    if (providerMode === 'openrouter' || providerMode === 'openrouter_free') {
+      try {
+        return await this.executeOpenRouterWithFallback(geminiRequest);
+      } catch (err) {
+        logger.warn('OpenRouter primary failed, trying Ollama local fallback...', { error: err.message });
+        return await this.executeOllamaRequest(geminiRequest);
+      }
+    }
+
+    // 2. Explicit Ollama Local Mode
+    if (providerMode === 'ollama') {
+      return await this.executeOllamaRequest(geminiRequest);
+    }
+
+    // 3. Explicit Gemini Only Mode
+    if (providerMode === 'gemini_only') {
+      return await this.executeGeminiRequest(geminiRequest);
+    }
+
+    // 4. Default: AUTO_FAILOVER (Zero-Downtime Circuit Breaker)
+    const now = Date.now();
+    const isGeminiTripped = this.circuitBreaker.geminiTrippedUntil > now;
+    const hasGeminiKey = !!config.getApiKey('GEMINI') && config.getApiKey('GEMINI') !== 'your-api-key-here';
+
+    if (!isGeminiTripped && hasGeminiKey && this.client) {
+      try {
+        const failoverTimeout = config.get('llm.failoverTimeout', 3500);
+        const result = await this.executeGeminiRequest(geminiRequest, failoverTimeout);
+        this.circuitBreaker.geminiFailures = 0;
+        this.providerStats.gemini.successes++;
+        return result;
+      } catch (geminiError) {
+        this.circuitBreaker.geminiFailures++;
+        this.providerStats.gemini.failures++;
+        if (this.circuitBreaker.geminiFailures >= this.circuitBreaker.tripThreshold) {
+          this.circuitBreaker.geminiTrippedUntil = Date.now() + this.circuitBreaker.resetTimeoutMs;
+          logger.warn('Gemini circuit breaker tripped! Routing to OpenRouter failover for 45s', {
+            failures: this.circuitBreaker.geminiFailures,
+            error: geminiError.message
+          });
+        }
+        logger.warn('Gemini failed/timed out. Switching automatically to OpenRouter free models...', { error: geminiError.message });
+      }
+    } else {
+      logger.info('Gemini skipped (tripped or unconfigured). Engaging failover provider directly.');
+    }
+
+    // Failover 1: OpenRouter (with Free LLMs)
+    const hasOpenRouterKey = !!(config.getApiKey('OPENROUTER') || process.env.OPENROUTER_API_KEY);
+    if (hasOpenRouterKey) {
+      try {
+        logger.info('Executing request via OpenRouter failover...');
+        return await this.executeOpenRouterWithFallback(geminiRequest);
+      } catch (orErr) {
+        logger.warn('OpenRouter failover failed, attempting Ollama...', { error: orErr.message });
+      }
+    }
+
+    // Failover 2: Ollama Local (100% Offline)
+    try {
+      logger.info('Executing request via Ollama local failover...');
+      return await this.executeOllamaRequest(geminiRequest);
+    } catch (ollamaErr) {
+      logger.warn('Ollama failover failed', { error: ollamaErr.message });
+    }
+
+    throw new Error('Todos os provedores de LLM (Gemini, OpenRouter, Ollama) falharam ou não estão configurados.');
   }
 
   /**
@@ -1123,7 +1461,87 @@ Remember: Be intelligent about filtering - provide quick, direct responses so th
    * as executeRequest. Accumulates and returns the full text; invokes onDelta
    * for each chunk.
    */
+  /**
+   * Orchestrates streaming requests with Circuit Breaker and Multi-LLM failover:
+   * Gemini -> OpenRouter (free/paid) -> Ollama local.
+   */
   async executeStreamingRequest(geminiRequest, onDelta) {
+    const providerMode = config.get('llm.providerMode', 'auto_failover');
+
+    // 1. Explicit OpenRouter Mode (Free or Paid)
+    if (providerMode === 'openrouter' || providerMode === 'openrouter_free') {
+      try {
+        return await this.executeOpenRouterStreamWithFallback(geminiRequest, onDelta);
+      } catch (err) {
+        logger.warn('OpenRouter stream failed, falling back to Ollama...', { error: err.message });
+        return await this.executeOllamaStreamRequest(geminiRequest, onDelta);
+      }
+    }
+
+    // 2. Explicit Ollama Mode
+    if (providerMode === 'ollama') {
+      return await this.executeOllamaStreamRequest(geminiRequest, onDelta);
+    }
+
+    // 3. Explicit Gemini Only Mode
+    if (providerMode === 'gemini_only') {
+      return await this.executeGeminiStreamRequest(geminiRequest, onDelta);
+    }
+
+    // 4. Default: AUTO_FAILOVER (Zero-Downtime Circuit Breaker)
+    const now = Date.now();
+    const isGeminiTripped = this.circuitBreaker.geminiTrippedUntil > now;
+    const hasGeminiKey = !!config.getApiKey('GEMINI') && config.getApiKey('GEMINI') !== 'your-api-key-here';
+
+    let streamedAnyDelta = false;
+    const trackingOnDelta = (delta) => {
+      streamedAnyDelta = true;
+      if (typeof onDelta === 'function') onDelta(delta);
+    };
+
+    if (!isGeminiTripped && hasGeminiKey && this.client) {
+      try {
+        const result = await this.executeGeminiStreamRequest(geminiRequest, trackingOnDelta);
+        this.circuitBreaker.geminiFailures = 0;
+        this.providerStats.gemini.successes++;
+        return result;
+      } catch (geminiError) {
+        this.circuitBreaker.geminiFailures++;
+        this.providerStats.gemini.failures++;
+        if (this.circuitBreaker.geminiFailures >= this.circuitBreaker.tripThreshold) {
+          this.circuitBreaker.geminiTrippedUntil = Date.now() + this.circuitBreaker.resetTimeoutMs;
+          logger.warn('Gemini stream circuit breaker tripped! Routing to OpenRouter failover', {
+            failures: this.circuitBreaker.geminiFailures,
+            error: geminiError.message
+          });
+        }
+        logger.warn('Gemini streaming failed. Switching automatically to OpenRouter...', { error: geminiError.message });
+      }
+    }
+
+    // Failover 1: OpenRouter (with Free LLMs)
+    const hasOpenRouterKey = !!(config.getApiKey('OPENROUTER') || process.env.OPENROUTER_API_KEY);
+    if (hasOpenRouterKey) {
+      try {
+        logger.info('Executing streaming request via OpenRouter failover...');
+        return await this.executeOpenRouterStreamWithFallback(geminiRequest, onDelta);
+      } catch (orErr) {
+        logger.warn('OpenRouter streaming failover failed, attempting Ollama...', { error: orErr.message });
+      }
+    }
+
+    // Failover 2: Ollama Local (100% Offline)
+    try {
+      logger.info('Executing streaming request via Ollama local failover...');
+      return await this.executeOllamaStreamRequest(geminiRequest, onDelta);
+    } catch (ollamaErr) {
+      logger.warn('Ollama streaming failover failed', { error: ollamaErr.message });
+    }
+
+    throw new Error('Todos os provedores de streaming (Gemini, OpenRouter, Ollama) falharam ou não estão configurados.');
+  }
+
+  async executeGeminiStreamRequest(geminiRequest, onDelta) {
     const maxRetries = config.get('llm.gemini.maxRetries');
     const apiKey = config.getApiKey('GEMINI');
     const primaryModel = this.model;
@@ -1457,54 +1875,67 @@ Remember: Be intelligent about filtering - provide quick, direct responses so th
     const cleanText = text.trim();
     const apiKey = config.getApiKey('GEMINI');
 
-    if (!apiKey || apiKey === 'your-api-key-here') {
-      logger.warn('Cannot translate to Portuguese: Gemini API key not available', {
-        keyConfigured: !!apiKey && apiKey !== 'your-api-key-here'
-      });
-      return cleanText;
+    if (apiKey && apiKey !== 'your-api-key-here') {
+      const primaryModel = this.model || config.get('llm.gemini.model') || 'gemini-3.1-flash-lite';
+      const fallbackModels = config.get('llm.gemini.fallbackModels') || ['gemini-3.5-flash-lite', 'gemini-3.5-flash'];
+      const modelsToTry = [primaryModel, ...fallbackModels.filter(m => m !== primaryModel)];
+
+      const prompt = `Translate the following speech transcription into natural Brazilian Portuguese. Return ONLY the translated Portuguese text without any intro, commentary, or quotation marks:\n\n${cleanText}`;
+      const geminiRequest = {
+        contents: [{
+          parts: [{ text: prompt }]
+        }],
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: 256
+        }
+      };
+
+      // Primary: direct native HTTPS request (bypasses Electron fetch socket issues)
+      for (const modelName of modelsToTry) {
+        try {
+          const translated = await this._executeAlternativeRequestForModel(geminiRequest, modelName, apiKey);
+          if (translated && translated.trim()) {
+            return translated.trim();
+          }
+        } catch (err) {
+          logger.warn(`Failed to translate transcription to Portuguese via HTTPS for model ${modelName}`, { error: err.message });
+        }
+      }
+
+      // Secondary fallback: SDK client if initialized
+      if (this.client) {
+        for (const modelName of modelsToTry) {
+          try {
+            const result = await this.client.models.generateContent({
+              model: modelName,
+              contents: prompt,
+              config: this.getGenerationConfig({ temperature: 0.1, maxOutputTokens: 256 })
+            });
+            const { text: translated } = this.extractTextFromCandidates(result);
+            if (translated && translated.trim()) {
+              return translated.trim();
+            }
+          } catch (_) {}
+        }
+      }
     }
 
-    const primaryModel = this.model || config.get('llm.gemini.model') || 'gemini-3.1-flash-lite';
-    const fallbackModels = config.get('llm.gemini.fallbackModels') || ['gemini-3.5-flash-lite', 'gemini-3.5-flash'];
-    const modelsToTry = [primaryModel, ...fallbackModels.filter(m => m !== primaryModel)];
-
-    const prompt = `Translate the following speech transcription into natural Brazilian Portuguese. Return ONLY the translated Portuguese text without any intro, commentary, or quotation marks:\n\n${cleanText}`;
-    const geminiRequest = {
-      contents: [{
-        parts: [{ text: prompt }]
-      }],
-      generationConfig: {
-        temperature: 0.1,
-        maxOutputTokens: 256
-      }
-    };
-
-    // Primary: direct native HTTPS request (bypasses Electron fetch socket issues)
-    for (const modelName of modelsToTry) {
+    // Failover: OpenRouter translation
+    const orKey = config.getApiKey('OPENROUTER') || process.env.OPENROUTER_API_KEY;
+    if (orKey && orKey !== 'your-openrouter-key') {
       try {
-        const translated = await this._executeAlternativeRequestForModel(geminiRequest, modelName, apiKey);
+        const prompt = `Translate the following speech transcription into natural Brazilian Portuguese. Return ONLY the translated Portuguese text without any intro, commentary, or quotation marks:\n\n${cleanText}`;
+        const transRequest = {
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 256 }
+        };
+        const translated = await this.executeOpenRouterWithFallback(transRequest);
         if (translated && translated.trim()) {
           return translated.trim();
         }
       } catch (err) {
-        logger.warn(`Failed to translate transcription to Portuguese via HTTPS for model ${modelName}`, { error: err.message });
-      }
-    }
-
-    // Secondary fallback: SDK client if initialized
-    if (this.client) {
-      for (const modelName of modelsToTry) {
-        try {
-          const result = await this.client.models.generateContent({
-            model: modelName,
-            contents: prompt,
-            config: this.getGenerationConfig({ temperature: 0.1, maxOutputTokens: 256 })
-          });
-          const { text: translated } = this.extractTextFromCandidates(result);
-          if (translated && translated.trim()) {
-            return translated.trim();
-          }
-        } catch (_) {}
+        logger.warn('OpenRouter translation fallback failed', { error: err.message });
       }
     }
 
@@ -1530,8 +1961,7 @@ Remember: Be intelligent about filtering - provide quick, direct responses so th
       return 'A transcrição da reunião está muito curta ou não contém falas gravadas suficientes para gerar um resumo.';
     }
 
-    const apiKey = config.getApiKey('GEMINI');
-    if (!this.client || !apiKey || apiKey === 'your-api-key-here') {
+    if (!this.isAnyProviderAvailable()) {
       return this._generateExtractiveMeetingSummaryFallback(cleanText);
     }
 
@@ -1671,13 +2101,12 @@ ${speechLines.length > 10 ? `\n_... e mais ${speechLines.length - 10} falas regi
       return { points: [], raw: '' };
     }
 
-    const apiKey = config.getApiKey('GEMINI');
-    if (!this.client || !apiKey || apiKey === 'your-api-key-here') {
+    if (!this.isAnyProviderAvailable()) {
       return this._generateTalkingPointsFallback(cleanQuestion, activeSkill);
     }
 
     try {
-      const interviewContext = this._loadInterviewContext();
+      const interviewContext = this._loadInterviewContext(cleanQuestion);
       const systemPrompt = `Você é um co-piloto de IA de altíssima velocidade para candidatos em entrevistas técnicas e comportamentais.
 O entrevistador acabou de fazer uma pergunta. Seu objetivo é gerar EXATAMENTE 3 marcadores estratégicos de resposta rápida (Talking Points).
 Eles devem permitir que o candidato comece a falar nos próximos 3 segundos com segurança e sem hesitar, cobrindo a resposta em alto nível enquanto elabora os detalhes.
@@ -1769,6 +2198,62 @@ Regras de Ouro:
     };
   }
 
+  /**
+   * Live Code Sentinel: analyzes coding problem or code snippet
+   * and extracts critical edge cases, hidden traps, and complexity constraints.
+   */
+  async analyzeCornerCases(problemOrCode, programmingLanguage = null) {
+    if (!problemOrCode || typeof problemOrCode !== 'string' || !problemOrCode.trim()) {
+      return 'Nenhum código ou enunciado fornecido para análise de casos de borda.';
+    }
+
+    const cleanInput = problemOrCode.trim();
+    const lang = programmingLanguage || 'general';
+
+    const prompt = `Você é um especialista em algoritmos competitivos (Codeforces Grandmaster e LeetCode 3000+).
+Analise o problema ou código abaixo (${lang}) e gere um alerta ultra-focado de CORNER CASES e ARMADILHAS OCULTAS que costumam quebrar soluções em entrevistas técnicas.
+
+Problema / Código fornecido:
+\`\`\`
+${cleanInput.substring(0, 4000)}
+\`\`\`
+
+Formate sua resposta EXATAMENTE com a seguinte estrutura em Markdown:
+
+### 🛡️ Corner Case Sentinel
+
+#### ⚠️ Casos de Borda Críticos (Teste antes de submeter!)
+- 🔴 **[Entrada Vazia / Mínima]**: (Ex: Array vazio [], string vazia "", N = 0 ou 1) -> Como lidar
+- 🔴 **[Valores Extremos / Negativos]**: (Ex: Números negativos, zeros, duplicatas ou elementos todos iguais) -> Risco
+- 🔴 **[Overflow & Tipagem]**: (Ex: Integer overflow > 2^31 - 1, usar 64-bit / long long, divisão por zero) -> Risco
+- 🔴 **[Estruturas Cíclicas / Fronteiras]**: (Ex: Nós nulos, ciclos, matrizes não-quadradas, off-by-one) -> Risco
+- 🔴 **[Escala & TLE]**: (Ex: Limite N = 10^5 exige O(N) ou O(N log N); O(N^2) dará Time Limit Exceeded)
+
+#### 🎯 Alvo de Complexidade
+- **Tempo Ótimo**: O(...)
+- **Espaço Auxiliar**: O(...)
+
+#### ⚡ Dica de Ouro de Implementação
+(1 frase apontando o ponteiro, invariante de loop ou caso base que mais causa bugs).`;
+
+    const request = {
+      contents: [{
+        role: 'user',
+        parts: [{ text: prompt }]
+      }],
+      generationConfig: {
+        temperature: 0.2,
+        maxOutputTokens: 1024
+      }
+    };
+
+    try {
+      return await this.executeRequest(request);
+    } catch (err) {
+      logger.error('Failed to analyze corner cases with LLM', { error: err.message });
+      return `### 🛡️ Corner Case Sentinel (Checklist Rápido)\n\n- 🔴 **Array Vazio ou 1 Elemento**: Verifique se o loop inicial quebra.\n- 🔴 **Números Negativos e Zero**: Teste divisão e comparações.\n- 🔴 **Overflow Numérico**: Considere 64-bit se os valores acumularem.\n- 🔴 **Complexidade**: Se $N \\ge 10^5$, evite $O(N^2)$.\n\n*(Erro ao consultar LLM: ${err.message})*`;
+    }
+  }
 
   generateFallbackResponse(text, activeSkill) {
     logger.info('Generating fallback response', { activeSkill });
@@ -1956,6 +2441,79 @@ Regras de Ouro:
     return (error?.message || 'Connection failed').replace(/^\[(GoogleGenerativeAI|GoogleGenAI) Error\]:\s*/i, '');
   }
 
+  async testOpenRouterConnection(apiKeyOverride = null, modelOverride = null) {
+    const apiKey = apiKeyOverride || config.getApiKey('OPENROUTER') || process.env.OPENROUTER_API_KEY;
+    if (!apiKey || apiKey === 'your-openrouter-key') {
+      return { success: false, error: 'Chave do OpenRouter não configurada.' };
+    }
+    const model = modelOverride || config.get('llm.openrouter.model', 'deepseek/deepseek-r1:free');
+    const startTime = Date.now();
+    try {
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'HTTP-Referer': config.get('llm.openrouter.siteUrl', 'https://github.com/TechyCSR/OpenCluely'),
+          'X-Title': config.get('llm.openrouter.siteName', 'OpenCluely'),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: 'user', content: 'Responda apenas: OK' }],
+          max_tokens: 16
+        })
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        return { success: false, error: `OpenRouter HTTP ${response.status}: ${errText.slice(0, 150)}` };
+      }
+
+      const json = await response.json();
+      const text = json.choices?.[0]?.message?.content || 'OK';
+      return {
+        success: true,
+        latency: Date.now() - startTime,
+        model,
+        response: text.trim()
+      };
+    } catch (err) {
+      return { success: false, error: `Falha ao conectar com OpenRouter: ${err.message}` };
+    }
+  }
+
+  async testOllamaConnection(baseUrlOverride = null, modelOverride = null) {
+    const baseUrl = baseUrlOverride || config.get('llm.ollama.baseUrl', 'http://localhost:11434');
+    const model = modelOverride || config.get('llm.ollama.model', 'llama3.2:3b');
+    const startTime = Date.now();
+    try {
+      const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: 'user', content: 'Responda apenas: OK' }],
+          max_tokens: 16
+        })
+      });
+
+      if (!response.ok) {
+        return { success: false, error: `Ollama HTTP ${response.status}` };
+      }
+
+      const json = await response.json();
+      const text = json.choices?.[0]?.message?.content || 'OK';
+      return {
+        success: true,
+        latency: Date.now() - startTime,
+        model,
+        response: text.trim()
+      };
+    } catch (err) {
+      return { success: false, error: `Não foi possível conectar ao Ollama em ${baseUrl}: ${err.message}` };
+    }
+  }
+
   updateApiKey(newApiKey) {
     process.env.GEMINI_API_KEY = newApiKey;
     this.isInitialized = false;
@@ -1970,7 +2528,13 @@ Regras de Ouro:
       requestCount: this.requestCount,
       errorCount: this.errorCount,
       successRate: this.requestCount > 0 ? ((this.requestCount - this.errorCount) / this.requestCount) * 100 : 0,
-      config: config.get('llm.gemini')
+      config: config.get('llm.gemini'),
+      providerStats: this.providerStats,
+      circuitBreaker: {
+        geminiFailures: this.circuitBreaker.geminiFailures,
+        isTripped: this.circuitBreaker.geminiTrippedUntil > Date.now(),
+        trippedUntil: this.circuitBreaker.geminiTrippedUntil
+      }
     };
   }
 

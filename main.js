@@ -686,6 +686,15 @@ class ApplicationController {
       return { success: true };
     });
 
+    ipcMain.handle("toggle-boss-key", () => {
+      const isHidden = windowManager.toggleBossKey();
+      return { success: true, isHidden };
+    });
+
+    ipcMain.handle("is-boss-key-active", () => {
+      return { active: !!windowManager.isBossKeyActive };
+    });
+
     ipcMain.handle("test-always-on-top", () => {
       const results = windowManager.testAlwaysOnTopForAllWindows();
       return { success: true, results };
@@ -717,6 +726,51 @@ class ApplicationController {
       })();
 
       return { success: true };
+    });
+
+    // Zero-Touch Proactive Question Detection
+    ipcMain.handle("set-zero-touch", (_event, { enabled }) => {
+      if (this.transcriptionController) {
+        this.transcriptionController.setZeroTouchEnabled(enabled);
+        windowManager.broadcastToAllWindows("zero-touch-changed", { enabled });
+      }
+      return { success: true };
+    });
+
+    ipcMain.handle("get-zero-touch", () => {
+      const enabled = this.transcriptionController
+        ? this.transcriptionController.isZeroTouchEnabled()
+        : true;
+      return { enabled };
+    });
+
+    // Dynamic Candidate Knowledge Base & STAR RAG
+    ipcMain.handle("get-candidate-knowledge", () => {
+      const knowledgeRagManager = require("./src/managers/knowledge-rag.manager");
+      return { success: true, items: knowledgeRagManager.getItems() };
+    });
+
+    ipcMain.handle("save-candidate-knowledge-item", (_event, item) => {
+      const knowledgeRagManager = require("./src/managers/knowledge-rag.manager");
+      const saved = knowledgeRagManager.saveItem(item);
+      return { success: !!saved, item: saved };
+    });
+
+    ipcMain.handle("delete-candidate-knowledge-item", (_event, { id }) => {
+      const knowledgeRagManager = require("./src/managers/knowledge-rag.manager");
+      const deleted = knowledgeRagManager.deleteItem(id);
+      return { success: deleted };
+    });
+
+    // Live Code Sentinel & Corner Case Watcher
+    ipcMain.handle("analyze-corner-cases", async (_event, { text, language }) => {
+      try {
+        const lang = language || this.codingLanguage || "cpp";
+        const analysis = await llmService.analyzeCornerCases(text, lang);
+        return { success: true, analysis };
+      } catch (err) {
+        return { success: false, error: err.message };
+      }
     });
 
     ipcMain.handle("get-skill-prompt", (event, skillName) => {
@@ -933,6 +987,32 @@ class ApplicationController {
       return { enabled: state };
     });
 
+    // Eye-Line Teleprompter (Notch View) IPC handlers
+    ipcMain.handle("toggle-teleprompter", () => {
+      const isVisible = windowManager.toggleTeleprompterWindow();
+      return { success: true, isVisible };
+    });
+
+    ipcMain.handle("show-teleprompter", () => {
+      windowManager.showTeleprompterWindow();
+      return { success: true, isVisible: true };
+    });
+
+    ipcMain.handle("hide-teleprompter", () => {
+      windowManager.hideTeleprompterWindow();
+      return { success: true, isVisible: false };
+    });
+
+    ipcMain.handle("snap-teleprompter-camera", () => {
+      const pos = windowManager.snapTeleprompterToCamera();
+      return { success: true, position: pos };
+    });
+
+    ipcMain.handle("set-teleprompter-content", (event, data) => {
+      windowManager.sendToTeleprompterWindow("teleprompter-data", data);
+      return { success: true };
+    });
+
     // Window binding IPC handlers
     ipcMain.handle("set-window-binding", (event, enabled) => {
       return windowManager.setWindowBinding(enabled);
@@ -961,6 +1041,18 @@ class ApplicationController {
 
     ipcMain.handle("test-gemini-connection", async () => {
       return await llmService.testConnection();
+    });
+
+    ipcMain.handle("test-openrouter-connection", async (_event, data = {}) => {
+      return await llmService.testOpenRouterConnection(data.apiKey, data.model);
+    });
+
+    ipcMain.handle("test-ollama-connection", async (_event, data = {}) => {
+      return await llmService.testOllamaConnection(data.baseUrl, data.model);
+    });
+
+    ipcMain.handle("get-llm-provider-stats", () => {
+      return llmService.getStats ? llmService.getStats() : {};
     });
 
     ipcMain.handle("run-gemini-diagnostics", async () => {
@@ -1406,6 +1498,14 @@ class ApplicationController {
       geminiKey: process.env.GEMINI_API_KEY || "",
       translateToPortuguese: this.transcriptionController ? this.transcriptionController.isTranslationEnabled() : false,
 
+      // Multi-LLM Failover & Fallback
+      llmProviderMode: process.env.LLM_PROVIDER_MODE || config.get('llm.providerMode', 'auto_failover'),
+      openrouterKey: process.env.OPENROUTER_API_KEY || config.getApiKey('OPENROUTER') || '',
+      openrouterModel: process.env.OPENROUTER_MODEL || config.get('llm.openrouter.model', 'deepseek/deepseek-r1:free'),
+      ollamaBaseUrl: process.env.OLLAMA_BASE_URL || config.get('llm.ollama.baseUrl', 'http://localhost:11434'),
+      ollamaModel: process.env.OLLAMA_MODEL || config.get('llm.ollama.model', 'llama3.2:3b'),
+      llmStats: llmService.getStats ? llmService.getStats() : null,
+
       azureConfigured: !!process.env.AZURE_SPEECH_KEY && !!process.env.AZURE_SPEECH_REGION,
       speechAvailable: this.speechAvailable
     };
@@ -1488,6 +1588,26 @@ class ApplicationController {
       if (settings.geminiKey !== undefined) {
         envUpdates.GEMINI_API_KEY = settings.geminiKey;
       }
+      if (settings.llmProviderMode !== undefined) {
+        envUpdates.LLM_PROVIDER_MODE = settings.llmProviderMode;
+        config.set('llm.providerMode', settings.llmProviderMode);
+      }
+      if (settings.openrouterKey !== undefined) {
+        envUpdates.OPENROUTER_API_KEY = settings.openrouterKey;
+        config.set('llm.openrouter.apiKey', settings.openrouterKey);
+      }
+      if (settings.openrouterModel !== undefined) {
+        envUpdates.OPENROUTER_MODEL = settings.openrouterModel;
+        config.set('llm.openrouter.model', settings.openrouterModel);
+      }
+      if (settings.ollamaBaseUrl !== undefined) {
+        envUpdates.OLLAMA_BASE_URL = settings.ollamaBaseUrl;
+        config.set('llm.ollama.baseUrl', settings.ollamaBaseUrl);
+      }
+      if (settings.ollamaModel !== undefined) {
+        envUpdates.OLLAMA_MODEL = settings.ollamaModel;
+        config.set('llm.ollama.model', settings.ollamaModel);
+      }
 
       // Capture the previous whisper command BEFORE persisting — persistEnvUpdates
       // mutates process.env in place, so comparing afterwards would always read
@@ -1506,17 +1626,21 @@ class ApplicationController {
         });
       }
 
-      // If the Gemini key was just saved, reinitialize the LLM service
-      // so the new client picks up the key. Without this, the test-
-      // connection button in the onboarding wizard fails with
-      // "Service not initialized" because the client was first created
-      // at app startup, before any key was set.
-      if (settings.geminiKey !== undefined && envUpdates.GEMINI_API_KEY !== undefined) {
+      // If any LLM provider key or config was saved, reinitialize the LLM service
+      // so the client picks up the new credentials/endpoints.
+      const llmUpdated = settings.geminiKey !== undefined ||
+        settings.openrouterKey !== undefined ||
+        settings.openrouterModel !== undefined ||
+        settings.llmProviderMode !== undefined ||
+        settings.ollamaBaseUrl !== undefined ||
+        settings.ollamaModel !== undefined;
+
+      if (llmUpdated) {
         try {
           llmService.initializeClient();
-          logger.info("LLM service reinitialized after Gemini key update");
+          logger.info("LLM service reinitialized after provider settings update");
         } catch (e) {
-          logger.warn("Failed to reinitialize LLM service after Gemini key update", {
+          logger.warn("Failed to reinitialize LLM service after provider update", {
             error: e.message
           });
         }

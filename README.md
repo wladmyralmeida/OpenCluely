@@ -100,14 +100,73 @@ Real-time multi-modal AI reasoning, dual-source audio transcription, real-time b
 
 ---
 
-### 8. 🧠 Multimodal AI Reasoning (Google Gemini)
+### 8. 👁️ Eye-Line Teleprompter & Modo Olhar Periférico (Notch View - `Alt + T`)
+- **Zero Movimento Ocular / Eye-Contact Preservado**: Janela ultra-compacta translúcida que se fixa automaticamente logo abaixo da lente da webcam/notch do monitor (`Snap to Camera 🧲`).
+- **Tópicos Dinâmicos de 7 a 10 Palavras (Bite-sized Bullets)**: Em vez de parágrafos extensos que forçam a leitura mecânica, exibe apenas os ganchos essenciais com palavras-chave de arquitetura realçadas em destaque.
+- **Auto-Pace com Transição Suave**: Avanço automático configurável (3s, 5s ou 8s por tópico) com barra de progresso visual sutil no rodapé, permitindo responder sem encostar no teclado.
+- **Navegação em 1 Toque**: Navegue com `←` e `→` / `Espaço`, alterne Auto-Pace com `P`, fixe no notch com `N` e alterne visibilidade com `Alt + T`.
+
+---
+
+### 9. ⚡ Multi-LLM Failover & Fallback Local (Zero Downtime)
+- **Zero Downtime Circuit Breaker**: Se a API do Google Gemini sofrer instabilidade, erro de quota 429, timeout (>3.5s) ou oscilação de conexão no meio da entrevista, a requisição transita sem interrupção para provedores alternativos.
+- **Alternância Flexível Pago vs. Gratuito**:
+  - ⚡ **Modo Auto Failover (Padrão)**: Prioriza Google Gemini (rápido e preciso); se o circuito abrir (429 / indisponibilidade), chaveia instantaneamente para o OpenRouter (modelos gratuitos `:free`) e para o Ollama local.
+  - 🆓 **Modo OpenRouter Free**: Opera sem qualquer custo utilizando LLMs de ponta gratuitas via OpenRouter (`deepseek/deepseek-r1:free`, `meta-llama/llama-3.3-70b-instruct:free`, `qwen/qwen-2.5-coder-32b-instruct:free`, `google/gemini-2.0-flash-exp:free`).
+  - 💎 **Modo Gemini Exclusivo**: Opera focado exclusivamente nos modelos Gemini da Google AI Studio.
+  - 🏠 **Modo Ollama Local (100% Offline)**: Execução local via Ollama (`http://localhost:11434`) para quando a conexão com a internet cair completamente.
+- **Streaming Token-a-Token Preservado**: Todas as rotas de failover mantêm o protocolo SSE / Streaming delta em tempo real.
+- **Painel de Configurações com Testes Instantâneos**: Teste a latência e a saúde de cada provedor (Gemini, OpenRouter, Ollama) com badges de status visuais nas Configurações.
+
+---
+
+### 10. 🚨 Boss Key & Modo Pânico Instantâneo (`Alt + Q` / `Cmd/Ctrl + Shift + X` / `/panic`)
+- **Camuflagem Total em 1 Milissegundo**: Pressionar `Alt + Q` (ou `Cmd/Ctrl + Shift + X`) oculta 100% das janelas ativas da aplicação imediatamente sem deixar rastros ou animações que chamem a atenção.
+- **Pausa Protetora de Microfone**: Pausa instantaneamente qualquer gravação de voz ativa para evitar capturar áudio indevido durante interrupções físicas (ex: alguém entrando na sala ou compartilhamento inesperado).
+- **Ocultação de Dock & Restauração Fiel**: Oculta o ícone do Dock no macOS e, ao pressionar novamente, restaura com precisão apenas as janelas que estavam visíveis antes do pânico.
+
+---
+
+### 11. 🛡️ Modo Zero-Touch (Detecção Proativa de Perguntas & Gatilho Automático)
+- **Operação 100% Sem as Mãos**: Elimina a necessidade de tocar no teclado ou no mouse durante momentos de alta tensão na entrevista.
+- **Detecção Semântica Interrogativa**: Analisa em tempo real a fala do entrevistador no canal do sistema (`[ENTREVISTADOR]`). Quando identifica construções interrogativas em Português ou Inglês (ex: *"Como você faria..."*, *"Qual foi seu maior desafio..."*, *"Could you explain how..."*), aciona a geração proativa da resposta automaticamente.
+- **Alerta Visual Suave**: Banner sutil no topo do chat notifica que a pergunta foi capturada e que os Smart Talking Points e resposta completa já estão sendo calculados.
+- **Ativação Rápida**: Alterne com 1 clique no botão `[Zero-Touch: ON/OFF]` da barra do chat ou pelo comando `/zerotouch`.
+
+---
+
+### 12. 🎯 Central de Conhecimento Dinâmica do Candidato (RAG & Histórico de Projetos / Método STAR)
+- **Respostas Baseadas na Sua Realidade Profissional**: Em vez de respostas genéricas de IA que soam artificiais, o OpenCluely recupera automaticamente seus cases reais de carreira para fundamentar cada resposta.
+- **Estrutura no Padrão STAR**:
+  - **S (Situação)**: Desafio de negócio, volume de tráfego, legado ou incidente crítico.
+  - **T (Tarefa)**: Sua meta técnica e responsabilidade específica.
+  - **A (Ação)**: Arquitetura implementada, padrões de projeto (DDD, Cache-Aside, Circuit Breaker) e decisões práticas.
+  - **R (Resultado)**: Métricas quantificáveis de alto impacto (latência -90%, R$ 2M economizados, 99.99% SLA).
+- **Busca Semântica & BM25**: A cada pergunta da entrevista, o sistema busca na sua base local (`~/.OpenCluely/candidate-knowledge.json`) os cases mais relevantes e os injeta diretamente no prompt do LLM.
+- **Gerenciador Visual & CRUD**: Modal dedicado no Chat (`[STAR]` ou `/star`) com cards coloridos e formulário para cadastrar, editar e remover seus projetos profissionais.
+
+---
+
+### 13. 💻 Live Code Sentinel & Corner Case Watcher (LeetCode / CoderPad / `Alt + C` / `/sentinel`)
+- **Blindagem Contra Armadilhas em Live Coding**: Detecta armadilhas ocultas que costumam reprovar candidatos em entrevistas técnicas (LeetCode, HackerRank, CoderPad).
+- **Atalho Global Instantâneo (`Alt + C`)**: Pressione `Alt + C` ou digite `/sentinel` para analisar instantaneamente o código selecionado na tela ou a última pergunta transcrita.
+- **Relatório Estruturado de Armadilhas**:
+  - ⚠️ **Inputs Vazios & Limites**: Vetores vazios `[]`, strings vazias `""`, $N = 0$ ou $1$.
+  - ⚠️ **Overflow & Tipagem**: Estouro de inteiro de 32-bits ($> 2^{31}-1$), divisões por zero, acumulação em 64-bits.
+  - ⚠️ **Estruturas Cíclicas & Off-by-One**: Ciclos em grafos/listas ligadas, ponteiros nulos, matrizes não quadradas.
+  - ⚠️ **Trava de Complexidade (TLE)**: Alerta se $O(N^2)$ estourará o tempo limite para $N \ge 10^5$, indicando o alvo ótimo $O(N \log N)$ ou $O(N)$.
+  - 🛡️ **Validações Defensivas Recomendadas**: Snippet de código pronto para colar com as validações de guarda que impressionam entrevistadores seniores.
+
+---
+
+### 14. 🧠 Multimodal AI Reasoning (Google Gemini)
 - **Direct Visual Screen Reasoning (`Cmd/Ctrl + Shift + S`)**: Takes screen/region captures and streams them directly into Gemini for instant problem solving without lossy OCR steps.
 - **Low-Latency Streaming**: Token-by-token streaming response rendered in real-time.
 - **Rich Code & Math Rendering**: Full syntax highlighting via PrismJS and mathematical formula rendering (LaTeX/MathJax).
 
 ---
 
-### 9. 🎯 Specialized Skills & Dynamic Prompts
+### 15. 🎯 Specialized Skills & Dynamic Prompts
 - **Interview Skill**: Structured guidance, follow-up answers, behavioral tips, and system design insights.
 - **DSA Skill**: Optimal algorithms, $O(n)$ time/space complexity analysis, and implementation in C++, Python, Java, JavaScript, or C.
 - **Sales & Pitch Skill**: Objection handling, value propositions, and live negotiation assistance.
@@ -208,12 +267,28 @@ sequenceDiagram
 
 | Action | Shortcut | Function |
 |---|---|---|
-| **Screenshot Analysis** | `Cmd/Ctrl + Shift + S` | Capture display area and reason with Gemini |
-| **Toggle Speech Recognition** | `Alt + R` | Start / Stop microphone listening |
-| **Toggle Window Visibility** | `Cmd/Ctrl + Shift + V` | Hide / Show all stealth windows |
-| **Toggle Click-Through Mode** | `Cmd/Ctrl + Shift + I` or `Alt + A` | Enable or disable mouse transparency |
-| **Open Chat Interface** | `Cmd/Ctrl + Shift + C` | Open the full interactive chat and translation panel |
-| **Settings Panel** | `Cmd/Ctrl + ,` | Open the configuration panel |
+| **Boss Key / Modo Pânico** | `Alt + Q` / `Cmd/Ctrl + Shift + X` | Oculta 100% das janelas imediatamente, pausa gravação e esconde o dock |
+| **Live Code Sentinel** | `Alt + C` | Analisa armadilhas de código, edge cases (LeetCode/CoderPad) e complexidade |
+| **Eye-Line Teleprompter (Notch)** | `Alt + T` / `Cmd/Ctrl + Alt + T` | Alterna o teleprompter compacto alinhado com a webcam/notch |
+| **Screenshot Analysis** | `Cmd/Ctrl + Shift + S` | Captura área da tela e envia diretamente para raciocínio com IA |
+| **Toggle Speech Recognition** | `Alt + R` | Inicia / Pausa captura e transcrição de áudio |
+| **Toggle Click-Through Mode** | `Cmd/Ctrl + Shift + I` or `Alt + A` | Alterna modo clique-transparente (stealth) vs interativo |
+| **Toggle Window Visibility** | `Cmd/Ctrl + Shift + V` | Alterna visibilidade geral de janelas |
+| **Open Chat Interface** | `Cmd/Ctrl + Shift + C` | Abre a janela principal de chat e transcrição bilíngue |
+| **Settings Panel** | `Cmd/Ctrl + ,` | Abre o painel de configurações (Multi-LLM, Áudio, Atalhos) |
+
+### 💬 Comandos Rápidos no Chat (Slash Commands)
+- `/panic` ou `/boss` — Ativa o Boss Key (Modo Pânico Instantâneo).
+- `/zerotouch` — Ativa/desativa a detecção proativa de perguntas sem mãos.
+- `/star` ou `/rag` — Abre a Central de Conhecimento com seus cases reais no método STAR.
+- `/sentinel [código]` — Executa análise de casos de borda e armadilhas para o código fornecido ou recente.
+- `/notch` ou `/prompter` — Alterna o teleprompter ou envia tópicos manuais (`/notch <tópico>`).
+- `/pontos <pergunta>` — Gera 3 Smart Talking Points estratégicos para responder na hora.
+- `/resumo` — Gera ata executiva e resumo com IA da reunião atual.
+- `/pdf` — Exporta relatório executivo diagramado em PDF vetorial.
+- `/checklist` — Extrai os Action Items da conversa formatados em checklist.
+- `/notion` ou `/slack` — Copia ata formatada para colar em canais ou documentações.
+- `/historico` — Abre o histórico de reuniões passadas salvas.
 
 ---
 

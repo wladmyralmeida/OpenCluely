@@ -16,6 +16,7 @@ class TranscriptionController {
     this.utteranceCoalesceMs = 150;
     this.responseSeq = 0;
     this.translateToPortuguese = process.env.TRANSLATE_TO_PORTUGUESE !== 'false';
+    this.zeroTouchEnabled = process.env.ZERO_TOUCH_MODE !== 'false';
   }
 
   setTranslationEnabled(enabled) {
@@ -26,6 +27,33 @@ class TranscriptionController {
 
   isTranslationEnabled() {
     return this.translateToPortuguese;
+  }
+
+  setZeroTouchEnabled(enabled) {
+    this.zeroTouchEnabled = !!enabled;
+    logger.info('Zero-Touch question detection toggled', { enabled: this.zeroTouchEnabled });
+    return this.zeroTouchEnabled;
+  }
+
+  isZeroTouchEnabled() {
+    return this.zeroTouchEnabled;
+  }
+
+  isQuestionUtterance(text) {
+    if (!text || typeof text !== 'string') return false;
+    const clean = text.trim();
+    if (clean.length < 5) return false;
+    if (clean.endsWith('?')) return true;
+
+    const questionPatterns = [
+      /^(what|how|why|when|where|who|which|can you|could you|would you|should you|do you|did you|have you|explain|describe|tell me|walk me through|give me an example|what's|how's)\b/i,
+      /^(qual|como|por que|porque|quando|onde|quem|você pode|poderia|explicar|explique|descreva|descrever|me conte|fale sobre|dê um exemplo|o que é|o que você)\b/i,
+      /\b(how would you (design|architect|implement|solve|handle)|how do you (handle|scale|optimize))\b/i,
+      /\b(como você (faria|desenharia|implementaria|resolveria|lidaria)|como você (otimiza|escala))\b/i,
+      /\b(difference between|trade-off between|trade-offs of|pros and cons of|vantagens e desvantagens|diferença entre)\b/i
+    ];
+
+    return questionPatterns.some(regex => regex.test(clean));
   }
 
   resetBuffer() {
@@ -141,6 +169,19 @@ class TranscriptionController {
     if (this.utteranceTimer) {
       clearTimeout(this.utteranceTimer);
       this.utteranceTimer = null;
+    }
+
+    // Zero-Touch Proactive Intent Detection:
+    // If the interviewer asks a question, notify the UI immediately so the user sees the answer being formed.
+    if (this.zeroTouchEnabled && speaker === 'ENTREVISTADOR' && this.isQuestionUtterance(this.utteranceBuffer)) {
+      this.sendToVoiceResponseWindows('zero-touch-question-detected', {
+        question: this.utteranceBuffer,
+        speaker,
+        timestamp: Date.now()
+      });
+      logger.info('⚡ Zero-Touch: Interrogative intent detected from interviewer', {
+        text: this.utteranceBuffer.substring(0, 100)
+      });
     }
 
     // Manual capture emits one complete transcript after the user presses stop,
@@ -603,6 +644,10 @@ class TranscriptionController {
       if (responseWindow && !responseWindow.isDestroyed()) {
         responseWindow.webContents.send(channel, data);
       }
+    }
+    // Always forward talking points and transcription responses to the Eye-Line Teleprompter
+    if (this.windowManager && typeof this.windowManager.sendToTeleprompterWindow === 'function') {
+      this.windowManager.sendToTeleprompterWindow(channel, data);
     }
   }
 

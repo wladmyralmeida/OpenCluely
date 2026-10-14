@@ -23,6 +23,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   resizeWindow: (width, height) => ipcRenderer.invoke('resize-window', { width, height }),
   moveWindow: (deltaX, deltaY) => ipcRenderer.invoke('move-window', { deltaX, deltaY }),
   getWindowStats: () => ipcRenderer.invoke('get-window-stats'),
+  toggleBossKey: () => ipcRenderer.invoke('toggle-boss-key'),
+  isBossKeyActive: () => ipcRenderer.invoke('is-boss-key-active'),
   
   // Session memory
   getSessionHistory: () => ipcRenderer.invoke('get-session-history'),
@@ -32,10 +34,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
   sendChatMessage: (text) => ipcRenderer.invoke('send-chat-message', text),
   getSkillPrompt: (skillName) => ipcRenderer.invoke('get-skill-prompt', skillName),
   
-  // Gemini LLM configuration
+  // Gemini & Multi-LLM configuration
   setGeminiApiKey: (apiKey) => ipcRenderer.invoke('set-gemini-api-key', apiKey),
   getGeminiStatus: () => ipcRenderer.invoke('get-gemini-status'),
   testGeminiConnection: () => ipcRenderer.invoke('test-gemini-connection'),
+  testOpenRouterConnection: (data) => ipcRenderer.invoke('test-openrouter-connection', data),
+  testOllamaConnection: (data) => ipcRenderer.invoke('test-ollama-connection', data),
+  getLLMProviderStats: () => ipcRenderer.invoke('get-llm-provider-stats'),
+
+  // Zero-Touch, STAR Knowledge & Live Code Sentinel
+  setZeroTouch: (enabled) => ipcRenderer.invoke('set-zero-touch', { enabled }),
+  getZeroTouch: () => ipcRenderer.invoke('get-zero-touch'),
+  getCandidateKnowledge: () => ipcRenderer.invoke('get-candidate-knowledge'),
+  saveCandidateKnowledgeItem: (item) => ipcRenderer.invoke('save-candidate-knowledge-item', item),
+  deleteCandidateKnowledgeItem: (id) => ipcRenderer.invoke('delete-candidate-knowledge-item', { id }),
+  analyzeCornerCases: (text, language) => ipcRenderer.invoke('analyze-corner-cases', { text, language }),
   
   // Settings
   showSettings: () => ipcRenderer.invoke('show-settings'),
@@ -108,6 +121,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setTranscriptionTranslation: (enabled) => ipcRenderer.invoke('set-transcription-translation', enabled),
   getTranscriptionTranslationStatus: () => ipcRenderer.invoke('get-transcription-translation-status'),
   
+  // Eye-Line Teleprompter (Notch View)
+  toggleTeleprompter: () => ipcRenderer.invoke('toggle-teleprompter'),
+  showTeleprompter: () => ipcRenderer.invoke('show-teleprompter'),
+  hideTeleprompter: () => ipcRenderer.invoke('hide-teleprompter'),
+  snapTeleprompterToCamera: () => ipcRenderer.invoke('snap-teleprompter-camera'),
+  setTeleprompterContent: (data) => ipcRenderer.invoke('set-teleprompter-content', data),
+  onTeleprompterData: (callback) => ipcRenderer.on('teleprompter-data', callback),
+  
   // Event listeners
   onTranscriptionReceived: (callback) => ipcRenderer.on('transcription-received', callback),
   onInterimTranscription: (callback) => ipcRenderer.on('interim-transcription', callback),
@@ -138,6 +159,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onTranscriptionTranslationChanged: (callback) => ipcRenderer.on('transcription-translation-changed', callback),
   onAudioInputSettingsChanged: (callback) => ipcRenderer.on('audio-input-settings-changed', callback),
   onMainWindowShown: (callback) => ipcRenderer.on('main-window-shown', callback),
+  onBossKeyState: (callback) => ipcRenderer.on('boss-key-state', callback),
+  onZeroTouchQuestionDetected: (callback) => ipcRenderer.on('zero-touch-question-detected', callback),
+  onTriggerSentinelAnalysis: (callback) => ipcRenderer.on('trigger-sentinel-analysis', callback),
   
   // Generic receive method
   receive: (channel, callback) => ipcRenderer.on(channel, callback),

@@ -39,10 +39,12 @@ class ConfigManager {
       },
 
       llm: {
+        providerMode: process.env.LLM_PROVIDER_MODE || 'auto_failover', // 'auto_failover', 'gemini', 'openrouter', 'ollama'
+        failoverTimeout: parseInt(process.env.LLM_FAILOVER_TIMEOUT || '3500', 10),
         gemini: {
-          model: 'gemini-3.1-flash-lite',
+          model: process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite',
           fallbackModels: ['gemini-3.5-flash-lite', 'gemini-3.5-flash'],
-          maxRetries: 3,
+          maxRetries: 2,
           timeout: 30000,
           fallbackEnabled: true,
           enableFallbackMethod: true,
@@ -53,6 +55,23 @@ class ConfigManager {
             maxOutputTokens: 4096,
             thinkingConfig: { thinkingBudget: 0 }
           }
+        },
+        openrouter: {
+          model: process.env.OPENROUTER_MODEL || 'deepseek/deepseek-r1:free',
+          fallbackModels: [
+            'meta-llama/llama-3.3-70b-instruct:free',
+            'qwen/qwen-2.5-coder-32b-instruct:free',
+            'google/gemini-2.0-flash-exp:free',
+            'mistralai/mistral-7b-instruct:free'
+          ],
+          timeout: 25000,
+          siteUrl: 'https://github.com/TechyCSR/OpenCluely',
+          siteName: 'OpenCluely'
+        },
+        ollama: {
+          baseUrl: process.env.OLLAMA_BASE_URL || 'http://localhost:11434',
+          model: process.env.OLLAMA_MODEL || 'llama3.2:3b',
+          timeout: 20000
         }
       },
 
@@ -107,6 +126,13 @@ class ConfigManager {
         hideFromDock: true,
         noAttachConsole: true,
         disguiseProcess: true
+      },
+
+      features: {
+        zeroTouch: process.env.ZERO_TOUCH_MODE !== 'false',
+        bossKey: true,
+        ragSTAR: true,
+        sentinel: true
       }
     };
   }

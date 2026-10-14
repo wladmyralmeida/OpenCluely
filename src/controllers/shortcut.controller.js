@@ -19,7 +19,15 @@ class ShortcutController {
       "CommandOrControl+Shift+\\": () => this.clearSessionMemory(),
       "CommandOrControl+,": () => this.windowManager.showSettings(),
       "Alt+A": () => this.windowManager.toggleInteraction(),
+      "Alt+Q": () => this.handleBossKey(),
+      "Alt+C": () => this.handleCornerCaseSentinel(),
+      "CommandOrControl+Shift+X": () => this.handleBossKey(),
       "Alt+R": () => this.toggleSpeechRecognition(),
+      "Alt+T": () => this.windowManager.toggleTeleprompterWindow(),
+      "CommandOrControl+Alt+T": () => {
+        this.windowManager.toggleTeleprompterWindow();
+        this.windowManager.snapTeleprompterToCamera();
+      },
       "CommandOrControl+Shift+T": () => this.windowManager.forceAlwaysOnTopForAllWindows(),
       "CommandOrControl+Shift+Alt+T": () => {
         const results = this.windowManager.testAlwaysOnTopForAllWindows();
@@ -76,6 +84,44 @@ class ShortcutController {
       logger.info("Session memory cleared via global shortcut");
     } catch (error) {
       logger.error("Error clearing session memory:", error);
+    }
+  }
+
+  handleBossKey() {
+    try {
+      // If audio is actively recording, pause it to prevent accidental capture
+      const currentSpeech = this.speechService?.getStatus?.();
+      if (currentSpeech?.isRecording) {
+        try {
+          this.speechService.stopRecording();
+          logger.info("Speech recording paused by Boss Key");
+        } catch (_) {}
+      }
+
+      const isHidden = this.windowManager.toggleBossKey();
+      logger.info("Boss Key toggled", { isHidden });
+    } catch (error) {
+      logger.error("Error handling Boss Key shortcut:", error);
+    }
+  }
+
+  handleCornerCaseSentinel() {
+    try {
+      logger.info('Live Code Sentinel triggered via shortcut (Alt+C)');
+      const chatWin = this.windowManager.getWindow('chat');
+      if (chatWin && !chatWin.isDestroyed()) {
+        chatWin.show();
+        chatWin.webContents.send('trigger-sentinel-analysis');
+      } else {
+        this.windowManager.showChatWindow().then(() => {
+          const w = this.windowManager.getWindow('chat');
+          if (w && !w.isDestroyed()) {
+            w.webContents.send('trigger-sentinel-analysis');
+          }
+        });
+      }
+    } catch (err) {
+      logger.error('Error handling Corner Case Sentinel shortcut:', err);
     }
   }
 

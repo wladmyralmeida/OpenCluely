@@ -25,6 +25,8 @@ class WindowManager {
     this.isInitialized = false;
     this.isInitializing = false;
     this.isRecording = false;
+    this.isBossKeyActive = false;
+    this._bossKeySavedState = null;
     
     // Add debouncing to prevent excessive operations
     this.lastEnforceTime = 0;
@@ -90,6 +92,13 @@ class WindowManager {
         alwaysOnTop: true,
         visibleOnAllWorkspaces: true,
         fullscreenable: false
+      },
+      teleprompter: {
+        width: 580,
+        height: 110,
+        file: 'teleprompter.html',
+        title: 'Eye-Line Teleprompter',
+        alwaysOnTop: true
       }
     };
 
@@ -117,6 +126,7 @@ class WindowManager {
       await this.createChatWindow();
       await this.createLLMResponseWindow();
       await this.createSettingsWindow();
+      await this.createTeleprompterWindow();
       
       this.setupWindowEventHandlers();
       this.setupScreenTracking();
@@ -260,6 +270,17 @@ class WindowManager {
     }
     const window = await this.createWindow('settings');
     this.windows.set('settings', window);
+    window.hide();
+    return window;
+  }
+
+  async createTeleprompterWindow() {
+    if (this.windows.has('teleprompter')) {
+      return this.windows.get('teleprompter');
+    }
+    const window = await this.createWindow('teleprompter');
+    this.windows.set('teleprompter', window);
+    this.snapTeleprompterToCamera(window);
     window.hide();
     return window;
   }
@@ -408,6 +429,34 @@ class WindowManager {
           titleBarStyle: 'hiddenInset',
           trafficLightPosition: { x: -100, y: -100 },
           acceptFirstMouse: true
+        }),
+        level: process.platform === 'darwin' ? 'floating' : undefined,
+      };
+    } else if (type === 'teleprompter') {
+      // Teleprompter window - positioned right under webcam/notch, transparent, frameless
+      browserWindowOptions = {
+        ...baseOptions,
+        frame: false,
+        titleBarStyle: 'hidden',
+        transparent: true,
+        backgroundColor: '#00000000',
+        resizable: true,
+        minWidth: 320,
+        maxWidth: 960,
+        minHeight: 48,
+        maxHeight: 320,
+        minimizable: false,
+        maximizable: false,
+        closable: false,
+        hasShadow: true,
+        thickFrame: false,
+        focusable: true,
+        skipTaskbar: true,
+        ...(process.platform === 'darwin' && {
+          titleBarStyle: 'hiddenInset',
+          trafficLightPosition: { x: -100, y: -100 },
+          acceptFirstMouse: true,
+          disableAutoHideCursor: true
         }),
         level: process.platform === 'darwin' ? 'floating' : undefined,
       };
@@ -1085,6 +1134,68 @@ class WindowManager {
     
     this.isVisible = false;
     logger.info('All windows hidden');
+  }
+
+  triggerBossKey() {
+    this._bossKeySavedState = {
+      windows: [],
+      timestamp: Date.now()
+    };
+
+    // Hide absolutely every window without exception for emergency camouflage
+    this.windows.forEach((win, type) => {
+      if (win && !win.isDestroyed() && win.isVisible()) {
+        this._bossKeySavedState.windows.push(type);
+        win.hide();
+      }
+    });
+
+    // Also hide macOS dock if available for complete stealth
+    try {
+      const { app } = require('electron');
+      if (app && app.dock && typeof app.dock.hide === 'function') {
+        app.dock.hide();
+      }
+    } catch (_) {}
+
+    this.isVisible = false;
+    this.isBossKeyActive = true;
+    this.broadcastToAllWindows('boss-key-state', { active: true });
+    logger.warn('🚨 BOSS KEY ACTIVATED: All windows hidden and stealth camouflage engaged');
+    return true;
+  }
+
+  restoreFromBossKey() {
+    try {
+      const { app } = require('electron');
+      if (app && app.dock && typeof app.dock.show === 'function') {
+        app.dock.show();
+      }
+    } catch (_) {}
+
+    const saved = (this._bossKeySavedState && this._bossKeySavedState.windows) || ['main'];
+    if (saved.length === 0) saved.push('main');
+
+    saved.forEach((type) => {
+      const win = this.windows.get(type);
+      if (win && !win.isDestroyed()) {
+        win.show();
+      }
+    });
+
+    this.isVisible = true;
+    this.isBossKeyActive = false;
+    this.broadcastToAllWindows('boss-key-state', { active: false });
+    logger.info('Boss key deactivated: Windows restored');
+    return false;
+  }
+
+  toggleBossKey() {
+    if (this.isBossKeyActive) {
+      return this.restoreFromBossKey();
+    } else {
+      return this.triggerBossKey();
+    }
   }
 
   toggleVisibility() {
@@ -1811,6 +1922,75 @@ class WindowManager {
     if (chatWindow && !chatWindow.isDestroyed()) {
       chatWindow.hide();
       logger.debug('Chat window hidden');
+    }
+  }
+
+  snapTeleprompterToCamera(teleprompterWindow = null) {
+    const win = teleprompterWindow || this.windows.get('teleprompter');
+    if (!win || win.isDestroyed()) return null;
+
+    try {
+      const electronScreen = (typeof screen !== 'undefined' && screen && typeof screen.getPrimaryDisplay === 'function') ? screen : null;
+      const primaryDisplay = electronScreen 
+        ? electronScreen.getPrimaryDisplay() 
+        : { workAreaSize: { width: 1440, height: 900 }, workArea: { x: 0, y: 0, width: 1440, height: 900 } };
+
+      const screenWidth = primaryDisplay.workAreaSize ? primaryDisplay.workAreaSize.width : 1440;
+      const displayX = (primaryDisplay.workArea && primaryDisplay.workArea.x) || 0;
+      const displayY = (primaryDisplay.workArea && primaryDisplay.workArea.y) || 0;
+      const [winWidth, winHeight] = win.getSize();
+
+      const x = Math.round(displayX + (screenWidth - winWidth) / 2);
+      const topPadding = process.platform === 'darwin' ? 8 : 10;
+      const y = displayY + topPadding;
+
+      win.setPosition(x, y);
+      logger.info('Teleprompter snapped to camera notch', { x, y, winWidth, winHeight });
+      return { x, y };
+    } catch (err) {
+      logger.warn('Failed to snap teleprompter to camera', { error: err.message });
+      return null;
+    }
+  }
+
+  showTeleprompterWindow() {
+    const teleprompterWindow = this.windows.get('teleprompter');
+    if (teleprompterWindow && !teleprompterWindow.isDestroyed()) {
+      this.showOnCurrentDesktop(teleprompterWindow);
+      teleprompterWindow.show();
+      logger.info('Teleprompter window shown');
+    }
+  }
+
+  hideTeleprompterWindow() {
+    const teleprompterWindow = this.windows.get('teleprompter');
+    if (teleprompterWindow && !teleprompterWindow.isDestroyed()) {
+      teleprompterWindow.hide();
+      logger.info('Teleprompter window hidden');
+    }
+  }
+
+  toggleTeleprompterWindow() {
+    const teleprompterWindow = this.windows.get('teleprompter');
+    if (!teleprompterWindow || teleprompterWindow.isDestroyed()) {
+      this.createTeleprompterWindow().then(() => {
+        this.showTeleprompterWindow();
+      });
+      return true;
+    }
+    if (teleprompterWindow.isVisible()) {
+      this.hideTeleprompterWindow();
+      return false;
+    } else {
+      this.showTeleprompterWindow();
+      return true;
+    }
+  }
+
+  sendToTeleprompterWindow(channel, data) {
+    const teleprompterWindow = this.windows.get('teleprompter');
+    if (teleprompterWindow && !teleprompterWindow.isDestroyed()) {
+      teleprompterWindow.webContents.send(channel, data);
     }
   }
 

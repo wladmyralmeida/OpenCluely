@@ -1366,6 +1366,86 @@
           opacity: 1;
           transform: translateY(0);
         }
+      /* STAR Knowledge Cases styles */
+      .star-case-card {
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        transition: border-color 0.2s, background 0.2s;
+      }
+      .star-case-card:hover {
+        background: rgba(255, 255, 255, 0.06);
+        border-color: rgba(56, 189, 248, 0.4);
+      }
+      .star-badge-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .star-role-pill {
+        background: rgba(56, 189, 248, 0.15);
+        color: #38bdf8;
+        font-size: 10px;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 10px;
+        border: 1px solid rgba(56, 189, 248, 0.3);
+      }
+      .star-step-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 6px;
+        font-size: 12px;
+        line-height: 1.4;
+      }
+      .star-step-item {
+        display: flex;
+        gap: 8px;
+      }
+      .star-step-tag {
+        font-weight: 700;
+        font-size: 10px;
+        padding: 2px 6px;
+        border-radius: 4px;
+        min-width: 20px;
+        text-align: center;
+        height: fit-content;
+      }
+      .star-tag-s { background: #3b82f6; color: #fff; }
+      .star-tag-t { background: #f59e0b; color: #fff; }
+      .star-tag-a { background: #10b981; color: #fff; }
+      .star-tag-r { background: #8b5cf6; color: #fff; }
+
+      /* Sentinel Result Card in Chat */
+      .sentinel-box {
+        background: rgba(16, 185, 129, 0.08);
+        border: 1px solid rgba(16, 185, 129, 0.3);
+        border-radius: 8px;
+        padding: 12px;
+        margin: 6px 0;
+        color: #e5e7eb;
+      }
+      .sentinel-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 700;
+        color: #34d399;
+        margin-bottom: 8px;
+        font-size: 13px;
+      }
+      .sentinel-trap-item {
+        background: rgba(0, 0, 0, 0.3);
+        border-left: 3px solid #f59e0b;
+        padding: 6px 10px;
+        margin: 6px 0;
+        border-radius: 0 4px 4px 0;
+        font-size: 12px;
       }
     </style>
   </head>
@@ -1395,6 +1475,21 @@
           <button class="icon-button active" id="translateToggleBtn" title="Traduzir transcrição para Português (Lado a Lado)" style="font-size: 11px; padding: 4px 8px; display: inline-flex; align-items: center; gap: 4px;">
             <i class="fas fa-language"></i> <span id="translateToggleLabel" style="font-size: 10px; font-weight: 600;">PT: ON</span>
           </button>
+          <button class="icon-button active" id="zeroTouchToggleBtn" title="Modo Zero-Touch: Detecção automática de perguntas do entrevistador" style="font-size: 11px; padding: 4px 8px; display: inline-flex; align-items: center; gap: 4px;">
+            <i class="fas fa-bolt" style="color: #fbbf24;"></i> <span id="zeroTouchToggleLabel" style="font-size: 10px; font-weight: 600;">Zero-Touch</span>
+          </button>
+          <button class="icon-button" id="ragCasesBtn" title="Central de Conhecimento: Cases reais do candidato & Método STAR (/star)" style="font-size: 11px; padding: 4px 8px; display: inline-flex; align-items: center; gap: 4px;">
+            <i class="fas fa-star" style="color: #38bdf8;"></i> <span style="font-size: 10px; font-weight: 600;">STAR</span>
+          </button>
+          <button class="icon-button" id="sentinelBtn" title="Live Code Sentinel: Análise de Corner Cases & Armadilhas (Alt+C)" style="font-size: 11px; padding: 4px 8px; display: inline-flex; align-items: center; gap: 4px;">
+            <i class="fas fa-shield-halved" style="color: #34d399;"></i> <span style="font-size: 10px; font-weight: 600;">Sentinel</span>
+          </button>
+          <button class="icon-button" id="teleprompterToggleBtn" title="Teleprompter Notch / Olhar Periférico (Alt+T)" style="font-size: 11px; padding: 4px 8px; display: inline-flex; align-items: center; gap: 4px;">
+            <i class="fas fa-eye" style="color: #a78bfa;"></i> <span style="font-size: 10px; font-weight: 600;">Notch</span>
+          </button>
+          <button class="icon-button" id="bossKeyBtn" title="Boss Key / Modo Pânico Instantâneo: Esconde tudo imediatamente (Alt+Q)" style="font-size: 11px; padding: 4px 8px; display: inline-flex; align-items: center; gap: 4px; color: #f87171;">
+            <i class="fas fa-eye-slash"></i> <span style="font-size: 10px; font-weight: 600;">Pânico</span>
+          </button>
           <button class="icon-button" id="chatSettingsBtn" title="Configurações (Áudio, Modelo, Atalhos)" style="font-size: 11px; padding: 4px 8px; display: inline-flex; align-items: center; gap: 4px;">
             <i class="fas fa-gear"></i>
           </button>
@@ -1402,6 +1497,15 @@
             <i class="fas fa-trash"></i>
           </button>
         </div>
+      </div>
+
+      <!-- Zero-Touch Alert Banner -->
+      <div id="zeroTouchAlertBanner" style="display: none; background: linear-gradient(90deg, rgba(245, 158, 11, 0.25), rgba(16, 185, 129, 0.25)); border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 6px; padding: 6px 12px; margin: 4px 14px; font-size: 11px; color: #fef3c7; align-items: center; justify-content: space-between;">
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <i class="fas fa-bolt" style="color: #fbbf24;"></i>
+          <span><strong>Zero-Touch:</strong> Pergunta do entrevistador detectada! Gerando resposta...</span>
+        </div>
+        <button id="closeZeroTouchBanner" style="background: none; border: none; color: rgba(255,255,255,0.7); cursor: pointer; font-size: 14px; padding: 0 4px;">&times;</button>
       </div>
 
       <!-- Quick Audio Source Selector Dropdown in Chat -->
@@ -1433,6 +1537,25 @@
         <button type="button" class="chat-menu-action-btn" id="menuOpenFolderBtn">
           <i class="fas fa-folder-open" style="color: #ffd700; margin-right: 8px;"></i> Abrir Pasta de Transcrições
         </button>
+      </div>
+
+      <!-- STAR Knowledge Base Modal -->
+      <div class="history-modal-overlay" id="starKnowledgeModal">
+        <div class="history-modal-container" style="max-width: 760px; max-height: 85vh;">
+          <div class="history-modal-header">
+            <div class="modal-title-group">
+              <div class="modal-title"><i class="fas fa-star" style="color: #38bdf8;"></i> Central de Conhecimento & Cases STAR</div>
+              <div class="modal-subtitle">Cases reais do seu histórico injetados dinamicamente via busca semântica na hora da pergunta</div>
+            </div>
+            <div class="modal-header-actions">
+              <button class="modal-action-btn" id="addStarCaseBtn"><i class="fas fa-plus"></i> Novo Case</button>
+              <button class="modal-close-btn" id="closeStarModalBtn">&times;</button>
+            </div>
+          </div>
+          <div style="padding: 16px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 12px;" id="starCasesList">
+            <!-- Dynamically populated cases cards -->
+          </div>
+        </div>
       </div>
 
       <!-- Interim Text Overlay -->
@@ -1914,8 +2037,29 @@
           listDiv.appendChild(row);
         });
 
+        // Action row to send talking points directly to the Notch Teleprompter
+        const actionsDiv = document.createElement('div');
+        actionsDiv.style.cssText = 'display: flex; justify-content: flex-end; gap: 6px; margin-top: 8px; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, 0.08);';
+        const prompterBtn = document.createElement('button');
+        prompterBtn.className = 'icon-button';
+        prompterBtn.style.cssText = 'font-size: 10px; padding: 3px 8px; display: inline-flex; align-items: center; gap: 4px; border-radius: 4px;';
+        prompterBtn.innerHTML = '<i class="fas fa-eye" style="color: #a78bfa;"></i> <span>Ver no Notch</span>';
+        prompterBtn.title = 'Exibir estes tópicos no Eye-Line Teleprompter abaixo da webcam (Alt+T)';
+        prompterBtn.onclick = (e) => {
+          e.stopPropagation();
+          const api = window.electronAPI || window.whysperAPI;
+          if (api && api.setTeleprompterContent) {
+            api.setTeleprompterContent({ points, question });
+          }
+          if (api && api.showTeleprompter) {
+            api.showTeleprompter();
+          }
+        };
+        actionsDiv.appendChild(prompterBtn);
+
         messageDiv.appendChild(headerDiv);
         messageDiv.appendChild(listDiv);
+        messageDiv.appendChild(actionsDiv);
 
         chatMessages.appendChild(messageDiv);
         chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -2584,6 +2728,406 @@
         });
       }
 
+      const teleprompterToggleBtn = document.getElementById('teleprompterToggleBtn');
+      if (teleprompterToggleBtn) {
+        teleprompterToggleBtn.addEventListener('click', async () => {
+          const api = window.electronAPI || window.whysperAPI;
+          if (api && api.toggleTeleprompter) {
+            await api.toggleTeleprompter();
+          }
+        });
+      }
+
+      // 🚨 Boss Key / Modo Pânico Instantâneo
+      const bossKeyBtn = document.getElementById('bossKeyBtn');
+      if (bossKeyBtn) {
+        bossKeyBtn.addEventListener('click', async () => {
+          const api = window.electronAPI || window.whysperAPI;
+          if (api && api.toggleBossKey) {
+            await api.toggleBossKey();
+          }
+        });
+      }
+
+      if (whysperAPI && whysperAPI.onBossKeyState) {
+        whysperAPI.onBossKeyState((_event, state) => {
+          if (bossKeyBtn) {
+            if (state && state.isBossKeyActive) {
+              bossKeyBtn.classList.add('active');
+            } else {
+              bossKeyBtn.classList.remove('active');
+            }
+          }
+        });
+      }
+
+      // 🛡️ Modo Zero-Touch (Detecção Automática de Perguntas)
+      const zeroTouchToggleBtn = document.getElementById('zeroTouchToggleBtn');
+      const zeroTouchToggleLabel = document.getElementById('zeroTouchToggleLabel');
+      const zeroTouchAlertBanner = document.getElementById('zeroTouchAlertBanner');
+      const closeZeroTouchBanner = document.getElementById('closeZeroTouchBanner');
+
+      let zeroTouchActive = true;
+
+      async function refreshZeroTouchState() {
+        try {
+          const api = window.electronAPI || window.whysperAPI;
+          if (api && api.getZeroTouch) {
+            const res = await api.getZeroTouch();
+            if (res && typeof res.enabled === 'boolean') {
+              zeroTouchActive = res.enabled;
+            }
+          }
+          updateZeroTouchUI();
+        } catch (e) {
+          console.warn('Could not load zero-touch state:', e);
+        }
+      }
+
+      function updateZeroTouchUI() {
+        if (!zeroTouchToggleBtn) return;
+        if (zeroTouchActive) {
+          zeroTouchToggleBtn.classList.add('active');
+          if (zeroTouchToggleLabel) zeroTouchToggleLabel.textContent = 'Zero-Touch: ON';
+        } else {
+          zeroTouchToggleBtn.classList.remove('active');
+          if (zeroTouchToggleLabel) zeroTouchToggleLabel.textContent = 'Zero-Touch: OFF';
+        }
+      }
+
+      if (zeroTouchToggleBtn) {
+        zeroTouchToggleBtn.addEventListener('click', async () => {
+          const api = window.electronAPI || window.whysperAPI;
+          zeroTouchActive = !zeroTouchActive;
+          if (api && api.setZeroTouch) {
+            await api.setZeroTouch(zeroTouchActive);
+          }
+          updateZeroTouchUI();
+          addMessage(
+            zeroTouchActive
+              ? '⚡ **Modo Zero-Touch ATIVADO**: Perguntas do entrevistador serão detectadas automaticamente sem você precisar apertar nada!'
+              : '⏸️ **Modo Zero-Touch DESATIVADO**: Respostas serão geradas apenas manualmente ou por atalho.',
+            'system'
+          );
+        });
+      }
+
+      let zeroTouchBannerTimer = null;
+      function showZeroTouchAlert(questionText) {
+        if (!zeroTouchAlertBanner) return;
+        const span = zeroTouchAlertBanner.querySelector('span');
+        if (span) {
+          const clean = (questionText || '').replace(/^\[ENTREVISTADOR\]\s*/i, '').trim();
+          span.innerHTML = `<strong>Zero-Touch:</strong> Pergunta detectada! <em>"${escapeHtml(clean.slice(0, 95))}${clean.length > 95 ? '...' : ''}"</em>`;
+        }
+        zeroTouchAlertBanner.style.display = 'flex';
+        if (zeroTouchBannerTimer) clearTimeout(zeroTouchBannerTimer);
+        zeroTouchBannerTimer = setTimeout(() => {
+          if (zeroTouchAlertBanner) zeroTouchAlertBanner.style.display = 'none';
+        }, 6000);
+      }
+
+      if (closeZeroTouchBanner) {
+        closeZeroTouchBanner.addEventListener('click', () => {
+          if (zeroTouchAlertBanner) zeroTouchAlertBanner.style.display = 'none';
+        });
+      }
+
+      if (whysperAPI && whysperAPI.onZeroTouchQuestionDetected) {
+        whysperAPI.onZeroTouchQuestionDetected((_event, data) => {
+          const q = data?.question || data?.text;
+          if (q) {
+            showZeroTouchAlert(q);
+          }
+        });
+      }
+
+      // 🎯 Central de Conhecimento & Cases STAR (RAG Dinâmico)
+      const starKnowledgeModal = document.getElementById('starKnowledgeModal');
+      const ragCasesBtn = document.getElementById('ragCasesBtn');
+      const closeStarModalBtn = document.getElementById('closeStarModalBtn');
+      const addStarCaseBtn = document.getElementById('addStarCaseBtn');
+      const starCasesList = document.getElementById('starCasesList');
+
+      let starCases = [];
+
+      function openStarKnowledgeModal() {
+        if (!starKnowledgeModal) return;
+        starKnowledgeModal.classList.add('active');
+        loadStarCases();
+      }
+
+      function closeStarKnowledgeModal() {
+        if (!starKnowledgeModal) return;
+        starKnowledgeModal.classList.remove('active');
+      }
+
+      if (ragCasesBtn) {
+        ragCasesBtn.addEventListener('click', openStarKnowledgeModal);
+      }
+
+      if (closeStarModalBtn) {
+        closeStarModalBtn.addEventListener('click', closeStarKnowledgeModal);
+      }
+
+      if (starKnowledgeModal) {
+        starKnowledgeModal.addEventListener('click', (e) => {
+          if (e.target === starKnowledgeModal) closeStarKnowledgeModal();
+        });
+      }
+
+      async function loadStarCases() {
+        if (!starCasesList) return;
+        starCasesList.innerHTML = '<div style="text-align: center; padding: 24px; color: rgba(255,255,255,0.5);"><i class="fas fa-spinner fa-spin"></i> Carregando cases...</div>';
+        try {
+          const api = window.electronAPI || window.whysperAPI;
+          if (api && api.getCandidateKnowledge) {
+            const res = await api.getCandidateKnowledge();
+            if (res && res.success && Array.isArray(res.items)) {
+              starCases = res.items;
+            } else {
+              starCases = [];
+            }
+          }
+          renderStarCases();
+        } catch (err) {
+          starCasesList.innerHTML = `<div style="color: #f87171; padding: 16px;">Erro ao carregar cases: ${escapeHtml(err.message)}</div>`;
+        }
+      }
+
+      function renderStarCases() {
+        if (!starCasesList) return;
+        if (!starCases || starCases.length === 0) {
+          starCasesList.innerHTML = `
+            <div style="text-align: center; padding: 32px 16px; color: rgba(255,255,255,0.5);">
+              <i class="fas fa-folder-open" style="font-size: 32px; margin-bottom: 10px; display: block;"></i>
+              Nenhum case cadastrado ainda.<br>Clique em <strong>Novo Case</strong> para adicionar seu primeiro projeto no método STAR!
+            </div>`;
+          return;
+        }
+
+        starCasesList.innerHTML = starCases.map(item => {
+          const kwPills = (item.keywords || []).map(k => `<span style="font-size: 9px; background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 4px; color: #94a3b8;">#${escapeHtml(k)}</span>`).join(' ');
+          return `
+            <div class="star-case-card" data-id="${escapeHtml(item.id)}">
+              <div class="star-badge-row">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <strong style="color: #fff; font-size: 13px;">${escapeHtml(item.title || 'Sem título')}</strong>
+                  ${item.role ? `<span class="star-role-pill">${escapeHtml(item.role)}</span>` : ''}
+                </div>
+                <button class="modal-action-btn delete-star-btn" data-id="${escapeHtml(item.id)}" style="color: #f87171; border-color: rgba(248, 113, 113, 0.2); padding: 3px 8px; font-size: 10px;">
+                  <i class="fas fa-trash"></i>
+                </button>
+              </div>
+              <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 4px;">${kwPills}</div>
+              <div class="star-step-grid">
+                <div class="star-step-item">
+                  <span class="star-step-tag star-tag-s">S</span>
+                  <div style="color: #cbd5e1;"><strong>Situação:</strong> ${escapeHtml(item.situation || '')}</div>
+                </div>
+                <div class="star-step-item">
+                  <span class="star-step-tag star-tag-t">T</span>
+                  <div style="color: #cbd5e1;"><strong>Tarefa:</strong> ${escapeHtml(item.task || '')}</div>
+                </div>
+                <div class="star-step-item">
+                  <span class="star-step-tag star-tag-a">A</span>
+                  <div style="color: #cbd5e1;"><strong>Ação:</strong> ${escapeHtml(item.action || '')}</div>
+                </div>
+                <div class="star-step-item">
+                  <span class="star-step-tag star-tag-r">R</span>
+                  <div style="color: #e9d5ff; font-weight: 500;"><strong>Resultado:</strong> ${escapeHtml(item.result || '')}</div>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        starCasesList.querySelectorAll('.delete-star-btn').forEach(btn => {
+          btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const id = btn.getAttribute('data-id');
+            if (!confirm('Deseja realmente remover este case STAR?')) return;
+            const api = window.electronAPI || window.whysperAPI;
+            if (api && api.deleteCandidateKnowledgeItem) {
+              await api.deleteCandidateKnowledgeItem(id);
+              loadStarCases();
+            }
+          });
+        });
+      }
+
+      if (addStarCaseBtn) {
+        addStarCaseBtn.addEventListener('click', () => {
+          showAddStarCaseForm();
+        });
+      }
+
+      function showAddStarCaseForm() {
+        const existingForm = document.getElementById('newStarFormCard');
+        if (existingForm) {
+          existingForm.scrollIntoView({ behavior: 'smooth' });
+          return;
+        }
+
+        const formHtml = `
+          <div id="newStarFormCard" style="background: rgba(30, 41, 59, 0.95); border: 1px solid rgba(56, 189, 248, 0.5); border-radius: 8px; padding: 14px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px;">
+            <div style="font-weight: 700; color: #38bdf8; font-size: 13px;"><i class="fas fa-plus-circle"></i> Cadastrar Novo Case Profissional (STAR)</div>
+            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 8px;">
+              <input type="text" id="starNewTitle" placeholder="Título do Case (ex: Refatoração Microsserviço de Pagamentos)" style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; padding: 6px 10px; color: #fff; font-size: 11px;">
+              <input type="text" id="starNewRole" placeholder="Empresa / Cargo (ex: Tech Lead @ Fintech)" style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; padding: 6px 10px; color: #fff; font-size: 11px;">
+            </div>
+            <textarea id="starNewSituation" placeholder="Situação (Contexto do problema, incidente ou gargalo)..." rows="2" style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; padding: 6px 10px; color: #fff; font-size: 11px;"></textarea>
+            <textarea id="starNewTask" placeholder="Tarefa (Sua meta ou desafio técnico específico)..." rows="2" style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; padding: 6px 10px; color: #fff; font-size: 11px;"></textarea>
+            <textarea id="starNewAction" placeholder="Ação (Decisões de engenharia, arquitetura e execução prática)..." rows="2" style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; padding: 6px 10px; color: #fff; font-size: 11px;"></textarea>
+            <textarea id="starNewResult" placeholder="Resultado (Impacto quantificável: latência -60%, zero downtime)..." rows="2" style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; padding: 6px 10px; color: #fff; font-size: 11px;"></textarea>
+            <input type="text" id="starNewKeywords" placeholder="Palavras-chave separadas por vírgula (ex: redis, kafka, latência, escala)" style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; padding: 6px 10px; color: #fff; font-size: 11px;">
+            <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px;">
+              <button class="modal-action-btn" id="cancelStarFormBtn">Cancelar</button>
+              <button class="modal-action-btn" id="saveStarFormBtn" style="background: #0284c7; border-color: #38bdf8;"><i class="fas fa-save"></i> Salvar Case</button>
+            </div>
+          </div>
+        `;
+        starCasesList.insertAdjacentHTML('afterbegin', formHtml);
+
+        document.getElementById('cancelStarFormBtn')?.addEventListener('click', () => {
+          document.getElementById('newStarFormCard')?.remove();
+        });
+
+        document.getElementById('saveStarFormBtn')?.addEventListener('click', async () => {
+          const title = document.getElementById('starNewTitle')?.value.trim();
+          const role = document.getElementById('starNewRole')?.value.trim();
+          const situation = document.getElementById('starNewSituation')?.value.trim();
+          const task = document.getElementById('starNewTask')?.value.trim();
+          const action = document.getElementById('starNewAction')?.value.trim();
+          const result = document.getElementById('starNewResult')?.value.trim();
+          const kwStr = document.getElementById('starNewKeywords')?.value.trim();
+
+          if (!title || !action || !result) {
+            alert('Por favor preencha pelo menos Título, Ação e Resultado!');
+            return;
+          }
+
+          const keywords = kwStr ? kwStr.split(',').map(s => s.trim().toLowerCase()).filter(Boolean) : [];
+          const api = window.electronAPI || window.whysperAPI;
+          if (api && api.saveCandidateKnowledgeItem) {
+            await api.saveCandidateKnowledgeItem({
+              title,
+              role,
+              situation,
+              task,
+              action,
+              result,
+              keywords
+            });
+            loadStarCases();
+          }
+        });
+      }
+
+      // 💻 Live Code Sentinel & Corner Case Watcher
+      const sentinelBtn = document.getElementById('sentinelBtn');
+
+      async function runSentinelAnalysis(customInput = '') {
+        let codeToAnalyze = (customInput || '').trim();
+
+        if (!codeToAnalyze) {
+          const selection = window.getSelection()?.toString()?.trim();
+          if (selection) {
+            codeToAnalyze = selection;
+          } else if (messageInput && messageInput.value.trim()) {
+            codeToAnalyze = messageInput.value.trim();
+            messageInput.value = '';
+            autoGrow(messageInput);
+          } else {
+            for (let i = chatHistory.length - 1; i >= 0; i--) {
+              const item = chatHistory[i];
+              if (item && item.code) {
+                codeToAnalyze = item.code;
+                break;
+              } else if (item && item.text && (item.text.includes('function') || item.text.includes('class') || item.text.includes('def ') || item.text.includes('for(') || item.text.length > 25)) {
+                codeToAnalyze = item.text;
+                break;
+              }
+            }
+          }
+        }
+
+        if (!codeToAnalyze) {
+          addMessage('🛡️ **Live Code Sentinel**: Nenhum código ou enunciado encontrado. Digite `/sentinel <código>` ou selecione um trecho de código na tela e pressione **Alt+C**!', 'system');
+          return;
+        }
+
+        addMessage(`🛡️ **Live Code Sentinel**: Analisando armadilhas de complexidade e corner cases para:\n\`\`\`\n${codeToAnalyze.slice(0, 130)}${codeToAnalyze.length > 130 ? '...' : ''}\n\`\`\`\n⏳ *Verificando armadilhas (inputs nulos, off-by-one, overflow, recursão, concorrência)...*`, 'system');
+
+        try {
+          const api = window.electronAPI || window.whysperAPI;
+          let res = null;
+          if (api && api.analyzeCornerCases) {
+            res = await api.analyzeCornerCases(codeToAnalyze, 'code');
+          }
+
+          if (res && res.success) {
+            displaySentinelResult(res);
+          } else {
+            addMessage(`⚠️ Falha na análise Sentinel: ${res?.error || 'Não foi possível analisar.'}`, 'error');
+          }
+        } catch (err) {
+          addMessage(`⚠️ Erro ao executar Sentinel: ${err.message}`, 'error');
+        }
+      }
+
+      function displaySentinelResult(res) {
+        const trapList = (res.cornerCases || []).map(cc => {
+          return `
+            <div class="sentinel-trap-item">
+              <div style="font-weight: 700; color: #fbbf24;">⚠️ ${escapeHtml(cc.case || '')}</div>
+              <div style="color: #cbd5e1; margin-top: 2px;"><strong>Risco:</strong> ${escapeHtml(cc.risk || '')}</div>
+              <div style="color: #34d399; margin-top: 2px;"><strong>Defesa:</strong> ${escapeHtml(cc.defense || '')}</div>
+            </div>
+          `;
+        }).join('');
+
+        const defChecks = res.recommendedChecks ? `
+          <div style="margin-top: 8px;">
+            <div style="font-size: 11px; font-weight: 600; color: #a78bfa; margin-bottom: 4px;">🛡️ Validações Defensivas Recomendadas:</div>
+            <pre style="background: rgba(0,0,0,0.4); padding: 8px; border-radius: 4px; font-size: 11px; color: #e2e8f0; overflow-x: auto;"><code>${escapeHtml(res.recommendedChecks)}</code></pre>
+          </div>
+        ` : '';
+
+        const card = document.createElement('div');
+        card.className = 'message system';
+        card.innerHTML = `
+          <div class="sentinel-box">
+            <div class="sentinel-header">
+              <i class="fas fa-shield-halved"></i>
+              <span>Live Code Sentinel — Relatório de Casos de Borda</span>
+              <span style="margin-left: auto; font-size: 10px; background: rgba(245, 158, 11, 0.2); color: #fbbf24; padding: 2px 8px; border-radius: 8px;">${escapeHtml(res.overallRisk || 'Atenção')}</span>
+            </div>
+            <div style="font-size: 11px; color: #94a3b8; margin-bottom: 8px;">
+              <strong>Problema identificado:</strong> ${escapeHtml(res.problemSummary || 'Algoritmo / Código')}
+            </div>
+            <div>
+              ${trapList}
+            </div>
+            ${defChecks}
+          </div>
+        `;
+        chatMessages.appendChild(card);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+      }
+
+      if (sentinelBtn) {
+        sentinelBtn.addEventListener('click', () => {
+          runSentinelAnalysis();
+        });
+      }
+
+      if (whysperAPI && whysperAPI.onTriggerSentinelAnalysis) {
+        whysperAPI.onTriggerSentinelAnalysis(() => {
+          runSentinelAnalysis();
+        });
+      }
+
       function getFormattedChatMessages() {
         if (!chatHistory || chatHistory.length === 0) return '';
         const lines = [
@@ -2726,6 +3270,28 @@
         const lower = text.toLowerCase();
 
         // Check for quick slash commands
+        if (lower.startsWith('/prompter') || lower.startsWith('/teleprompter') || lower.startsWith('/notch')) {
+          addMessage(text, 'user');
+          messageInput.value = '';
+          autoGrow(messageInput);
+          const customPrompt = text.replace(/^\/(?:teleprompter|prompter|notch)\s*/i, '').trim();
+          const api = window.electronAPI || window.whysperAPI;
+          if (customPrompt) {
+            if (api && api.setTeleprompterContent) {
+              api.setTeleprompterContent({ points: [customPrompt], question: 'Prompt Manual' });
+            }
+            if (api && api.showTeleprompter) {
+              api.showTeleprompter();
+            }
+            addMessage('👁️ Tópico enviado para o Eye-Line Teleprompter (Notch)!', 'system');
+          } else {
+            if (api && api.toggleTeleprompter) {
+              api.toggleTeleprompter();
+            }
+          }
+          return;
+        }
+
         if (
           lower === '/resumo' ||
           lower === '/summary' ||
@@ -2823,20 +3389,71 @@
           return;
         }
 
+        if (lower === '/panic' || lower === '/boss' || lower === '/panico' || lower === '/pânico') {
+          addMessage(text, 'user');
+          messageInput.value = '';
+          autoGrow(messageInput);
+          const api = window.electronAPI || window.whysperAPI;
+          if (api && api.toggleBossKey) {
+            await api.toggleBossKey();
+          }
+          return;
+        }
+
+        if (lower === '/zerotouch' || lower === '/zero-touch') {
+          addMessage(text, 'user');
+          messageInput.value = '';
+          autoGrow(messageInput);
+          zeroTouchActive = !zeroTouchActive;
+          const api = window.electronAPI || window.whysperAPI;
+          if (api && api.setZeroTouch) {
+            await api.setZeroTouch(zeroTouchActive);
+          }
+          updateZeroTouchUI();
+          addMessage(
+            zeroTouchActive
+              ? '⚡ **Modo Zero-Touch ATIVADO**: Perguntas do entrevistador serão detectadas e respondidas proativamente!'
+              : '⏸️ **Modo Zero-Touch DESATIVADO**: Respostas automáticas desabilitadas.',
+            'system'
+          );
+          return;
+        }
+
+        if (lower === '/star' || lower === '/rag' || lower === '/cases' || lower === '/experiencia') {
+          addMessage(text, 'user');
+          messageInput.value = '';
+          autoGrow(messageInput);
+          openStarKnowledgeModal();
+          return;
+        }
+
+        if (lower.startsWith('/sentinel') || lower.startsWith('/cornercase') || lower.startsWith('/cornercases') || lower.startsWith('/armadilhas')) {
+          const codeQuery = text.replace(/^\/(?:sentinel|cornercases?|armadilhas)\s*/i, '').trim();
+          addMessage(text, 'user');
+          messageInput.value = '';
+          autoGrow(messageInput);
+          runSentinelAnalysis(codeQuery);
+          return;
+        }
+
         if (lower === '/ajuda' || lower === '/help' || lower === '/comandos') {
           addMessage(text, 'user');
           messageInput.value = '';
           autoGrow(messageInput);
           addMessage(
             `💡 **Comandos Rápidos do OpenCluely**:\n\n` +
+            `• \`/panic\` ou \`/boss\` (Alt+Q) — Oculta 100% da interface e pausa microfone instantaneamente\n` +
+            `• \`/zerotouch\` — Ativa/desativa detecção automática proativa de perguntas\n` +
+            `• \`/star\` ou \`/rag\` — Abre Central de Conhecimento com histórico de cases no método STAR\n` +
+            `• \`/sentinel <código>\` (Alt+C) — Análise de Armadilhas & Casos de Borda para Coding Interviews\n` +
+            `• \`/notch\` ou \`/prompter\` (Alt+T) — Alterna ou envia tópicos para o Eye-Line Teleprompter\n` +
+            `• \`/pontos <pergunta>\` — Gera Smart Talking Points para perguntas de entrevista\n` +
             `• \`/resumo\` — Sintetiza a reunião com IA e gera decisões/próximos passos\n` +
             `• \`/pdf\` — Exporta relatório executivo diagramado em PDF vetorial\n` +
             `• \`/checklist\` — Extrai e copia os Action Items da reunião\n` +
             `• \`/notion\` ou \`/slack\` — Copia ata formatada para Notion/Slack\n` +
             `• \`/mensagens\` — Copia o histórico completo de mensagens do chat\n` +
-            `• \`/export\` — Abre os botões da central de exportação rápida\n` +
-            `• \`/historico\` — Abre histórico com todas as transcrições e atas\n` +
-            `• \`/pontos <pergunta>\` — Gera Smart Talking Points para perguntas de entrevista`,
+            `• \`/historico\` — Abre histórico com todas as reuniões e gravações`,
             'system'
           );
           return;
@@ -3752,6 +4369,7 @@
 
       // Initial load
       refreshChatAudioSourceState();
+      refreshZeroTouchState();
     </script>
   </body>
 </html>

@@ -33,7 +33,8 @@ async function testTranslationFeature() {
     addUserInput: () => {},
     addUserMessage: () => {},
     addModelResponse: () => {},
-    getFormattedHistory: () => ({ recent: [] })
+    getFormattedHistory: () => ({ recent: [] }),
+    getOptimizedHistory: () => ({ recent: [] })
   };
 
   const transcriptionController = new TranscriptionController({

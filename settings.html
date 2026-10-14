@@ -540,16 +540,103 @@
             
             <div class="settings-section">
                 <div class="settings-section-title">
-                    <i class="fas fa-robot"></i>
-                    Gemini Settings
+                    <i class="fas fa-bolt"></i>
+                    ⚡ Multi-LLM & Failover (Zero Downtime)
                 </div>
                 <div class="settings-section-content">
                     <div class="settings-item">
                         <div>
-                            <div class="settings-item-label">Google API Key</div>
-                            <div class="settings-item-description">Your Google API key for Gemini models</div>
+                            <div class="settings-item-label">Modo de Operação</div>
+                            <div class="settings-item-description">Escolha failover automático (pago/grátis) ou provedor exclusivo</div>
                         </div>
-                        <input type="password" class="input-field" id="geminiKey" placeholder="Enter your Google API key">
+                        <select class="input-field" id="llmProviderMode">
+                            <option value="auto_failover">⚡ Failover Automático: Gemini → OpenRouter (Free) → Ollama</option>
+                            <option value="openrouter_free">🆓 OpenRouter (LLMs Gratuitas :free)</option>
+                            <option value="gemini_only">💎 Google Gemini (Exclusivo)</option>
+                            <option value="ollama">🏠 Ollama Local (100% Offline)</option>
+                        </select>
+                    </div>
+
+                    <!-- Gemini Credentials -->
+                    <div id="geminiFields" class="settings-group" style="margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 10px;">
+                        <div class="settings-item">
+                            <div>
+                                <div class="settings-item-label">Google Gemini API Key</div>
+                                <div class="settings-item-description">Chave para Gemini 2.5 Flash / Flash-Lite</div>
+                            </div>
+                            <input type="password" class="input-field" id="geminiKey" placeholder="AIzaSy...">
+                        </div>
+                        <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px;">
+                            <button class="btn" id="testGeminiBtn" type="button" style="font-size: 11px;">
+                                <i class="fas fa-check-circle"></i> Testar Gemini
+                            </button>
+                            <span id="geminiTestStatus" style="font-size: 11px; align-self: center; color: rgba(255,255,255,0.7);"></span>
+                        </div>
+                    </div>
+
+                    <!-- OpenRouter Credentials -->
+                    <div id="openrouterFields" class="settings-group" style="margin-top: 14px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 10px;">
+                        <div class="settings-item">
+                            <div>
+                                <div class="settings-item-label">OpenRouter API Key</div>
+                                <div class="settings-item-description">Permite usar dezenas de LLMs gratuitas (:free) sem custo</div>
+                            </div>
+                            <input type="password" class="input-field" id="openrouterKey" placeholder="sk-or-v1-...">
+                        </div>
+                        <div class="settings-item">
+                            <div>
+                                <div class="settings-item-label">Modelo OpenRouter</div>
+                                <div class="settings-item-description">Selecione uma LLM gratuita de ponta ou digite personalizada</div>
+                            </div>
+                            <select class="input-field" id="openrouterModelSelect">
+                                <option value="deepseek/deepseek-r1:free">DeepSeek-R1 (Raciocínio Avançado :free)</option>
+                                <option value="meta-llama/llama-3.3-70b-instruct:free">Llama 3.3 70B Instruct (:free)</option>
+                                <option value="qwen/qwen-2.5-coder-32b-instruct:free">Qwen 2.5 Coder 32B (:free)</option>
+                                <option value="google/gemini-2.0-flash-exp:free">Gemini 2.0 Flash Exp (:free)</option>
+                                <option value="custom">Outro modelo personalizado...</option>
+                            </select>
+                        </div>
+                        <div class="settings-item" id="openrouterCustomModelRow" style="display: none;">
+                            <div>
+                                <div class="settings-item-label">ID do Modelo Personalizado</div>
+                                <div class="settings-item-description">Ex: anthropic/claude-3.5-sonnet ou deepseek/deepseek-chat</div>
+                            </div>
+                            <input type="text" class="input-field" id="openrouterModel" placeholder="deepseek/deepseek-r1:free">
+                        </div>
+                        <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px;">
+                            <button class="btn" id="testOpenRouterBtn" type="button" style="font-size: 11px;">
+                                <i class="fas fa-plug"></i> Testar OpenRouter
+                            </button>
+                            <span id="openrouterTestStatus" style="font-size: 11px; align-self: center; color: rgba(255,255,255,0.7);"></span>
+                        </div>
+                    </div>
+
+                    <!-- Ollama Credentials -->
+                    <div id="ollamaFields" class="settings-group" style="margin-top: 14px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 10px;">
+                        <div class="settings-item">
+                            <div>
+                                <div class="settings-item-label">Ollama Base URL (Local)</div>
+                                <div class="settings-item-description">URL do servidor Ollama local para operação offline</div>
+                            </div>
+                            <input type="text" class="input-field" id="ollamaBaseUrl" placeholder="http://localhost:11434">
+                        </div>
+                        <div class="settings-item">
+                            <div>
+                                <div class="settings-item-label">Modelo Ollama Local</div>
+                                <div class="settings-item-description">Nome do modelo instalado no Ollama</div>
+                            </div>
+                            <input type="text" class="input-field" id="ollamaModel" placeholder="llama3.2:3b">
+                        </div>
+                        <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px;">
+                            <button class="btn" id="testOllamaBtn" type="button" style="font-size: 11px;">
+                                <i class="fas fa-server"></i> Testar Ollama Local
+                            </button>
+                            <span id="ollamaTestStatus" style="font-size: 11px; align-self: center; color: rgba(255,255,255,0.7);"></span>
+                        </div>
+                    </div>
+
+                    <div class="settings-note" style="margin-top: 12px;">
+                        ⚡ <strong>Zero Downtime Circuit Breaker:</strong> Se o Gemini atingir rate limit (429) ou demorar mais de 3.5s, as perguntas e transcrições são enviadas instantaneamente ao OpenRouter gratuito ou Ollama sem congelar a entrevista.
                     </div>
                 </div>
             </div>

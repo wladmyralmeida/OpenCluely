@@ -23,6 +23,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const callAudioStatus = document.getElementById('callAudioStatus');
     const micAudioStatus = document.getElementById('micAudioStatus');
     const geminiKeyInput = document.getElementById('geminiKey');
+    const llmProviderModeSelect = document.getElementById('llmProviderMode');
+    const openrouterKeyInput = document.getElementById('openrouterKey');
+    const openrouterModelSelect = document.getElementById('openrouterModelSelect');
+    const openrouterCustomModelRow = document.getElementById('openrouterCustomModelRow');
+    const openrouterModelInput = document.getElementById('openrouterModel');
+    const ollamaBaseUrlInput = document.getElementById('ollamaBaseUrl');
+    const ollamaModelInput = document.getElementById('ollamaModel');
+    const testGeminiBtn = document.getElementById('testGeminiBtn');
+    const geminiTestStatus = document.getElementById('geminiTestStatus');
+    const testOpenRouterBtn = document.getElementById('testOpenRouterBtn');
+    const openrouterTestStatus = document.getElementById('openrouterTestStatus');
+    const testOllamaBtn = document.getElementById('testOllamaBtn');
+    const ollamaTestStatus = document.getElementById('ollamaTestStatus');
     const windowGapInput = document.getElementById('windowGap');
     const codingLanguageSelect = document.getElementById('codingLanguage');
     const activeSkillSelect = document.getElementById('activeSkill');
@@ -214,6 +227,29 @@ document.addEventListener('DOMContentLoaded', () => {
         audioSettingsLoaded = true;
         refreshAudioDevices();
         if (geminiKeyInput) geminiKeyInput.value = settings.geminiKey || '';
+        if (llmProviderModeSelect && settings.llmProviderMode) {
+            llmProviderModeSelect.value = settings.llmProviderMode;
+        }
+        if (openrouterKeyInput) {
+            openrouterKeyInput.value = settings.openrouterKey || '';
+        }
+        if (settings.openrouterModel && openrouterModelSelect) {
+            const hasOption = Array.from(openrouterModelSelect.options).some(o => o.value === settings.openrouterModel);
+            if (hasOption) {
+                openrouterModelSelect.value = settings.openrouterModel;
+                if (openrouterCustomModelRow) openrouterCustomModelRow.style.display = 'none';
+            } else {
+                openrouterModelSelect.value = 'custom';
+                if (openrouterModelInput) openrouterModelInput.value = settings.openrouterModel;
+                if (openrouterCustomModelRow) openrouterCustomModelRow.style.display = 'flex';
+            }
+        }
+        if (ollamaBaseUrlInput) {
+            ollamaBaseUrlInput.value = settings.ollamaBaseUrl || 'http://localhost:11434';
+        }
+        if (ollamaModelInput) {
+            ollamaModelInput.value = settings.ollamaModel || 'llama3.2:3b';
+        }
         if (windowGapInput) windowGapInput.value = settings.windowGap || '';
 
         // Set C++ as default if no coding language is specified
@@ -291,6 +327,15 @@ document.addEventListener('DOMContentLoaded', () => {
             settings.micAudioInputId = micAudioInputId;
         }
         if (geminiKeyInput) settings.geminiKey = geminiKeyInput.value;
+        if (llmProviderModeSelect) settings.llmProviderMode = llmProviderModeSelect.value;
+        if (openrouterKeyInput) settings.openrouterKey = openrouterKeyInput.value;
+        if (openrouterModelSelect) {
+            settings.openrouterModel = openrouterModelSelect.value === 'custom'
+                ? (openrouterModelInput ? openrouterModelInput.value.trim() : 'deepseek/deepseek-r1:free')
+                : openrouterModelSelect.value;
+        }
+        if (ollamaBaseUrlInput) settings.ollamaBaseUrl = ollamaBaseUrlInput.value;
+        if (ollamaModelInput) settings.ollamaModel = ollamaModelInput.value;
         if (windowGapInput) settings.windowGap = windowGapInput.value;
         if (codingLanguageSelect) settings.codingLanguage = codingLanguageSelect.value;
         if (activeSkillSelect) settings.activeSkill = activeSkillSelect.value;
@@ -343,6 +388,11 @@ document.addEventListener('DOMContentLoaded', () => {
         whisperResponseTargetSelect,
         whisperSegmentMsInput,
         geminiKeyInput,
+        llmProviderModeSelect,
+        openrouterKeyInput,
+        openrouterModelInput,
+        ollamaBaseUrlInput,
+        ollamaModelInput,
         translateToPortugueseSelect,
         windowGapInput
     ];
@@ -353,6 +403,99 @@ document.addEventListener('DOMContentLoaded', () => {
             input.addEventListener('blur', saveSettings);
         }
     });
+
+    if (openrouterModelSelect) {
+        openrouterModelSelect.addEventListener('change', () => {
+            if (openrouterModelSelect.value === 'custom') {
+                if (openrouterCustomModelRow) openrouterCustomModelRow.style.display = 'flex';
+            } else {
+                if (openrouterCustomModelRow) openrouterCustomModelRow.style.display = 'none';
+            }
+            saveSettings();
+        });
+    }
+
+    // LLM connection test buttons
+    if (testGeminiBtn && window.electronAPI && window.electronAPI.testGeminiConnection) {
+        testGeminiBtn.addEventListener('click', async () => {
+            geminiTestStatus.textContent = 'Testando...';
+            geminiTestStatus.style.color = 'rgba(255, 255, 255, 0.7)';
+            testGeminiBtn.disabled = true;
+            try {
+                saveSettings();
+                const res = await window.electronAPI.testGeminiConnection();
+                if (res && res.success) {
+                    geminiTestStatus.textContent = `✓ OK (${res.latency || 0}ms)`;
+                    geminiTestStatus.style.color = '#4caf50';
+                } else {
+                    geminiTestStatus.textContent = `✗ ${res.error || 'Falha'}`;
+                    geminiTestStatus.style.color = '#f44336';
+                }
+            } catch (err) {
+                geminiTestStatus.textContent = `✗ ${err.message}`;
+                geminiTestStatus.style.color = '#f44336';
+            } finally {
+                testGeminiBtn.disabled = false;
+            }
+        });
+    }
+
+    if (testOpenRouterBtn && window.electronAPI && window.electronAPI.testOpenRouterConnection) {
+        testOpenRouterBtn.addEventListener('click', async () => {
+            openrouterTestStatus.textContent = 'Testando...';
+            openrouterTestStatus.style.color = 'rgba(255, 255, 255, 0.7)';
+            testOpenRouterBtn.disabled = true;
+            try {
+                saveSettings();
+                const model = openrouterModelSelect.value === 'custom'
+                    ? (openrouterModelInput ? openrouterModelInput.value.trim() : 'deepseek/deepseek-r1:free')
+                    : openrouterModelSelect.value;
+                const res = await window.electronAPI.testOpenRouterConnection({
+                    apiKey: openrouterKeyInput ? openrouterKeyInput.value.trim() : '',
+                    model
+                });
+                if (res && res.success) {
+                    openrouterTestStatus.textContent = `✓ OK (${res.latency || 0}ms)`;
+                    openrouterTestStatus.style.color = '#4caf50';
+                } else {
+                    openrouterTestStatus.textContent = `✗ ${res.error || 'Falha'}`;
+                    openrouterTestStatus.style.color = '#f44336';
+                }
+            } catch (err) {
+                openrouterTestStatus.textContent = `✗ ${err.message}`;
+                openrouterTestStatus.style.color = '#f44336';
+            } finally {
+                testOpenRouterBtn.disabled = false;
+            }
+        });
+    }
+
+    if (testOllamaBtn && window.electronAPI && window.electronAPI.testOllamaConnection) {
+        testOllamaBtn.addEventListener('click', async () => {
+            ollamaTestStatus.textContent = 'Testando...';
+            ollamaTestStatus.style.color = 'rgba(255, 255, 255, 0.7)';
+            testOllamaBtn.disabled = true;
+            try {
+                saveSettings();
+                const res = await window.electronAPI.testOllamaConnection({
+                    baseUrl: ollamaBaseUrlInput ? ollamaBaseUrlInput.value.trim() : 'http://localhost:11434',
+                    model: ollamaModelInput ? ollamaModelInput.value.trim() : 'llama3.2:3b'
+                });
+                if (res && res.success) {
+                    ollamaTestStatus.textContent = `✓ OK (${res.latency || 0}ms)`;
+                    ollamaTestStatus.style.color = '#4caf50';
+                } else {
+                    ollamaTestStatus.textContent = `✗ ${res.error || 'Falha'}`;
+                    ollamaTestStatus.style.color = '#f44336';
+                }
+            } catch (err) {
+                ollamaTestStatus.textContent = `✗ ${err.message}`;
+                ollamaTestStatus.style.color = '#f44336';
+            } finally {
+                testOllamaBtn.disabled = false;
+            }
+        });
+    }
 
     if (speechProviderSelect) {
         speechProviderSelect.addEventListener('change', () => {

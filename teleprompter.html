@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OpenCluely Eye-Line Teleprompter</title>
+    <link href="./src/styles/common.css" rel="stylesheet" />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        background: transparent !important;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        user-select: none;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif;
+        color: #ffffff;
+        -webkit-app-region: no-drag;
+      }
+
+      /* Container do Teleprompter */
+      .teleprompter-container {
+        width: 100vw;
+        height: 100vh;
+        background: linear-gradient(
+          135deg,
+          rgba(15, 17, 23, 0.94) 0%,
+          rgba(24, 26, 36, 0.96) 100%
+        );
+        backdrop-filter: blur(28px) saturate(190%);
+        -webkit-backdrop-filter: blur(28px) saturate(190%);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 14px;
+        box-shadow: 0 10px 32px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        padding: 6px 12px 6px 12px;
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        position: relative;
+        overflow: hidden;
+      }
+
+      /* Header superior arrastável e controles */
+      .prompter-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        -webkit-app-region: drag;
+        cursor: move;
+        padding-bottom: 4px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        gap: 8px;
+        flex-shrink: 0;
+      }
+
+      .prompter-brand {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 10.5px;
+        font-weight: 700;
+        letter-spacing: 0.4px;
+        color: rgba(255, 255, 255, 0.9);
+      }
+
+      .status-pulse {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #10b981;
+        box-shadow: 0 0 8px rgba(16, 185, 129, 0.8);
+        animation: pulse-glow 2s infinite;
+      }
+
+      @keyframes pulse-glow {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.5; transform: scale(1.15); }
+      }
+
+      .question-badge {
+        font-size: 10px;
+        color: rgba(255, 255, 255, 0.65);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 200px;
+        padding: 1px 6px;
+        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .prompter-controls {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        -webkit-app-region: no-drag;
+      }
+
+      .ctrl-btn {
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        color: rgba(255, 255, 255, 0.85);
+        border-radius: 5px;
+        padding: 3px 6px;
+        font-size: 10px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        line-height: 1;
+      }
+
+      .ctrl-btn:hover {
+        background: rgba(255, 255, 255, 0.18);
+        color: #ffffff;
+      }
+
+      .ctrl-btn.active {
+        background: rgba(167, 139, 250, 0.28);
+        border-color: rgba(167, 139, 250, 0.6);
+        color: #d8b4fe;
+      }
+
+      .ctrl-btn.snap-btn:hover {
+        background: rgba(56, 189, 248, 0.25);
+        border-color: #38bdf8;
+        color: #38bdf8;
+      }
+
+      .close-btn:hover {
+        background: rgba(244, 63, 94, 0.25) !important;
+        border-color: rgba(244, 63, 94, 0.5) !important;
+        color: #f43f5e !important;
+      }
+
+      /* Área de Conteúdo do Teleprompter */
+      .prompter-body {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        position: relative;
+        overflow: hidden;
+        margin: 2px 0;
+        gap: 8px;
+        min-height: 52px;
+      }
+
+      /* Navegação Anterior / Próximo */
+      .nav-arrow {
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: rgba(255, 255, 255, 0.7);
+        border-radius: 6px;
+        width: 24px;
+        height: 48px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        flex-shrink: 0;
+        -webkit-app-region: no-drag;
+      }
+
+      .nav-arrow:hover:not(:disabled) {
+        background: rgba(255, 255, 255, 0.16);
+        color: #ffffff;
+      }
+
+      .nav-arrow:disabled {
+        opacity: 0.25;
+        cursor: not-allowed;
+      }
+
+      /* Cartão Ativo (Destaque Central) */
+      .bullet-display-area {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 3px;
+        overflow: hidden;
+        cursor: pointer;
+        padding: 0 4px;
+      }
+
+      .bullet-main-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+      }
+
+      .bullet-step-badge {
+        font-size: 10px;
+        font-weight: 800;
+        padding: 2px 6px;
+        border-radius: 4px;
+        background: linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%);
+        color: #ffffff;
+        letter-spacing: 0.3px;
+        flex-shrink: 0;
+        box-shadow: 0 2px 6px rgba(124, 58, 237, 0.4);
+      }
+
+      .bullet-text {
+        font-size: 13.5px;
+        font-weight: 600;
+        line-height: 1.32;
+        color: #ffffff;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+        word-break: break-word;
+        transition: font-size 0.15s ease;
+      }
+
+      .bullet-text.keyword-highlight strong,
+      .bullet-text strong {
+        color: #38bdf8;
+        font-weight: 700;
+      }
+
+      /* Prévia do próximo ponto (esmaecido) */
+      .bullet-preview-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 10.5px;
+        color: rgba(255, 255, 255, 0.42);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        padding-left: 2px;
+      }
+
+      .preview-label {
+        font-size: 9px;
+        text-transform: uppercase;
+        font-weight: 700;
+        letter-spacing: 0.3px;
+        color: rgba(255, 255, 255, 0.35);
+      }
+
+      /* Barra de Progresso Auto-Pace */
+      .pace-progress-container {
+        width: 100%;
+        height: 2px;
+        background: rgba(255, 255, 255, 0.08);
+        border-radius: 2px;
+        overflow: hidden;
+        flex-shrink: 0;
+      }
+
+      .pace-progress-bar {
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, #38bdf8 0%, #a78bfa 100%);
+        border-radius: 2px;
+        transition: width 0.1s linear;
+      }
+
+      /* Modo Standby / Vazio */
+      .standby-message {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        color: rgba(255, 255, 255, 0.6);
+        font-size: 12px;
+        font-weight: 500;
+        width: 100%;
+        text-align: center;
+      }
+
+      .standby-shortcut {
+        font-size: 10px;
+        background: rgba(255, 255, 255, 0.1);
+        padding: 1px 5px;
+        border-radius: 4px;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        color: rgba(255, 255, 255, 0.8);
+      }
+
+      /* Modo Expandido (3 Cards empilhados) */
+      .teleprompter-container.expanded-mode {
+        height: 180px;
+      }
+
+      .cards-list-view {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        width: 100%;
+        overflow-y: auto;
+        padding-right: 2px;
+      }
+
+      .compact-card-item {
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 6px;
+        padding: 6px 8px;
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
+
+      .compact-card-item:hover {
+        background: rgba(255, 255, 255, 0.09);
+        border-color: rgba(255, 255, 255, 0.16);
+      }
+
+      .compact-card-item.active {
+        background: rgba(124, 58, 237, 0.18);
+        border-color: rgba(167, 139, 250, 0.5);
+      }
+
+      .compact-card-item.active .bullet-text {
+        color: #ffffff;
+      }
+
+      .compact-card-item:not(.active) .bullet-text {
+        color: rgba(255, 255, 255, 0.6);
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="teleprompter-container" id="prompterContainer">
+      <!-- Header Superior -->
+      <div class="prompter-header">
+        <div class="prompter-brand">
+          <span class="status-pulse" id="statusPulse" title="Monitorando áudio e perguntas"></span>
+          <span>EYE-LINE NOTCH</span>
+          <span class="question-badge" id="questionBadge">Aguardando fala…</span>
+        </div>
+
+        <div class="prompter-controls">
+          <button class="ctrl-btn" id="autoPaceBtn" title="Avanço Automático de Tópicos (Tecla P)">
+            <i class="fas fa-play" id="paceIcon"></i>
+            <span id="paceLabel">5s</span>
+          </button>
+          <button class="ctrl-btn" id="fontSizeBtn" title="Alterar Tamanho da Fonte">
+            <span id="fontSizeLabel">A</span>
+          </button>
+          <button class="ctrl-btn" id="modeToggleBtn" title="Alternar entre modo 1 Linha e Lista 3 Tópicos">
+            <i class="fas fa-bars"></i>
+          </button>
+          <button class="ctrl-btn snap-btn" id="snapToNotchBtn" title="Fixar exatamente abaixo da Webcam / Notch (Tecla N)">
+            <i class="fas fa-magnet"></i>
+          </button>
+          <button class="ctrl-btn close-btn" id="closePrompterBtn" title="Ocultar Teleprompter (Alt+T ou Esc)">
+            <i class="fas fa-xmark"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Corpo Principal (Teleprompter) -->
+      <div class="prompter-body" id="prompterBody">
+        <button class="nav-arrow" id="prevBtn" title="Ponto Anterior (←)" disabled>
+          <i class="fas fa-chevron-left"></i>
+        </button>
+
+        <div class="bullet-display-area" id="bulletDisplayArea" title="Clique para avançar">
+          <div class="standby-message" id="standbyView">
+            <i class="fas fa-eye" style="color: #a78bfa;"></i>
+            <span>Olhe diretamente para a câmera. Tópicos aparecerão aqui.</span>
+            <span class="standby-shortcut">Alt+T</span>
+          </div>
+
+          <div id="activeBulletView" style="display: none; width: 100%;">
+            <div class="bullet-main-row">
+              <span class="bullet-step-badge" id="stepBadge">1/3</span>
+              <div class="bullet-text" id="bulletText">Carregando tópico…</div>
+            </div>
+            <div class="bullet-preview-row" id="previewRow">
+              <span class="preview-label">A seguir:</span>
+              <span id="previewText">Próximo ponto estratégico</span>
+            </div>
+          </div>
+
+          <div class="cards-list-view" id="cardsListView" style="display: none;"></div>
+        </div>
+
+        <button class="nav-arrow" id="nextBtn" title="Próximo Ponto (→ ou Espaço)" disabled>
+          <i class="fas fa-chevron-right"></i>
+        </button>
+      </div>
+
+      <!-- Barra de Progresso Auto-Pace -->
+      <div class="pace-progress-container">
+        <div class="pace-progress-bar" id="paceProgressBar"></div>
+      </div>
+    </div>
+
+    <script>
+      // Estado interno do Teleprompter
+      const state = {
+        bullets: [],
+        currentIndex: 0,
+        question: "",
+        autoPaceActive: false,
+        paceSeconds: 5,
+        paceTimer: null,
+        paceProgress: 0,
+        paceInterval: null,
+        fontSizeIndex: 1, // 0: Pequeno (12px), 1: Médio (13.5px), 2: Grande (15.5px)
+        fontSizes: ["12px", "13.5px", "15.5px"],
+        isExpanded: false
+      };
+
+      // Elementos do DOM
+      const dom = {
+        container: document.getElementById("prompterContainer"),
+        statusPulse: document.getElementById("statusPulse"),
+        questionBadge: document.getElementById("questionBadge"),
+        autoPaceBtn: document.getElementById("autoPaceBtn"),
+        paceIcon: document.getElementById("paceIcon"),
+        paceLabel: document.getElementById("paceLabel"),
+        fontSizeBtn: document.getElementById("fontSizeBtn"),
+        fontSizeLabel: document.getElementById("fontSizeLabel"),
+        modeToggleBtn: document.getElementById("modeToggleBtn"),
+        snapToNotchBtn: document.getElementById("snapToNotchBtn"),
+        closePrompterBtn: document.getElementById("closePrompterBtn"),
+        prevBtn: document.getElementById("prevBtn"),
+        nextBtn: document.getElementById("nextBtn"),
+        bulletDisplayArea: document.getElementById("bulletDisplayArea"),
+        standbyView: document.getElementById("standbyView"),
+        activeBulletView: document.getElementById("activeBulletView"),
+        cardsListView: document.getElementById("cardsListView"),
+        stepBadge: document.getElementById("stepBadge"),
+        bulletText: document.getElementById("bulletText"),
+        previewRow: document.getElementById("previewRow"),
+        previewText: document.getElementById("previewText"),
+        paceProgressBar: document.getElementById("paceProgressBar")
+      };
+
+      // Formata sentenças longas em tópicos teleprompter dinâmicos de 7 a 10 palavras
+      function formatIntoBiteSizedBullets(pointsOrText) {
+        if (Array.isArray(pointsOrText) && pointsOrText.length > 0) {
+          return pointsOrText.map((p, idx) => {
+            let clean = String(p).trim().replace(/^[0-9]+[\.\)\-]\s*/, "");
+            // Garantir concisão de teleprompter (aproximadamente 7 a 12 palavras)
+            return highlightKeywords(clean);
+          });
+        }
+
+        if (typeof pointsOrText === "string" && pointsOrText.trim().length > 0) {
+          const sentences = pointsOrText
+            .split(/(?<=[.?!])\s+/)
+            .map((s) => s.trim())
+            .filter((s) => s.length > 10);
+          if (sentences.length > 0) {
+            return sentences.slice(0, 3).map((s) => highlightKeywords(s));
+          }
+        }
+
+        return [
+          "1. <strong>[Gancho Direto]</strong>: Comece com o conceito central nos primeiros 2s.",
+          "2. <strong>[Arquitetura Real]</strong>: Cite o padrão, trade-offs e métricas da sua stack.",
+          "3. <strong>[Visão Sênior]</strong>: Conclua com escalabilidade e armadilhas evitadas."
+        ];
+      }
+
+      // Realça termos técnicos e arquiteturais para leitura periférica
+      function highlightKeywords(text) {
+        const keywords = [
+          "PostgreSQL", "Redis", "Kafka", "Docker", "Kubernetes", "AWS",
+          "O(1)", "O(n)", "O(log n)", "O(n log n)", "concorrência", "latência",
+          "cache", "índice", "transação", "ACID", "consistência", "microservices",
+          "gRPC", "REST", "sharding", "replicação", "deadlock", "throughput"
+        ];
+        let highlighted = text;
+        keywords.forEach((kw) => {
+          const regex = new RegExp(`\\b(${kw})\\b`, "gi");
+          highlighted = highlighted.replace(regex, "<strong>$1</strong>");
+        });
+        return highlighted;
+      }
+
+      // Atualiza a visualização com base no ponto ativo
+      function renderCurrentBullet() {
+        if (!state.bullets || state.bullets.length === 0) {
+          dom.standbyView.style.display = "flex";
+          dom.activeBulletView.style.display = "none";
+          dom.cardsListView.style.display = "none";
+          dom.prevBtn.disabled = true;
+          dom.nextBtn.disabled = true;
+          dom.previewRow.style.display = "none";
+          return;
+        }
+
+        dom.standbyView.style.display = "none";
+
+        if (state.isExpanded) {
+          // Renderiza modo lista de 3 cartões
+          dom.activeBulletView.style.display = "none";
+          dom.cardsListView.style.display = "flex";
+          dom.cardsListView.innerHTML = "";
+          state.bullets.forEach((b, idx) => {
+            const card = document.createElement("div");
+            card.className = `compact-card-item ${idx === state.currentIndex ? "active" : ""}`;
+            card.innerHTML = `
+              <span class="bullet-step-badge">${idx + 1}</span>
+              <div class="bullet-text" style="font-size: ${state.fontSizes[state.fontSizeIndex]};">${b}</div>
+            `;
+            card.addEventListener("click", () => {
+              state.currentIndex = idx;
+              renderCurrentBullet();
+            });
+            dom.cardsListView.appendChild(card);
+          });
+        } else {
+          // Renderiza modo focado (1 ponto em destaque + prévia)
+          dom.cardsListView.style.display = "none";
+          dom.activeBulletView.style.display = "block";
+
+          const total = state.bullets.length;
+          const current = state.currentIndex;
+          dom.stepBadge.textContent = `${current + 1}/${total}`;
+          dom.bulletText.innerHTML = state.bullets[current];
+          dom.bulletText.style.fontSize = state.fontSizes[state.fontSizeIndex];
+
+          // Prévia do próximo ponto
+          if (current + 1 < total) {
+            dom.previewRow.style.display = "flex";
+            // Extrai texto limpo para a prévia sem tags html pesadas
+            const cleanPreview = state.bullets[current + 1].replace(/<[^>]*>/g, "");
+            dom.previewText.textContent = cleanPreview;
+          } else {
+            dom.previewRow.style.display = "none";
+          }
+        }
+
+        dom.prevBtn.disabled = state.currentIndex === 0;
+        dom.nextBtn.disabled = state.currentIndex === state.bullets.length - 1;
+      }
+
+      // Avança para o próximo bullet
+      function nextBullet() {
+        if (state.currentIndex < state.bullets.length - 1) {
+          state.currentIndex++;
+          renderCurrentBullet();
+          resetPaceProgress();
+        } else if (state.autoPaceActive) {
+          // Chegou ao fim: desativa o auto-pace ou reinicia
+          toggleAutoPace(false);
+        }
+      }
+
+      // Retorna para o bullet anterior
+      function prevBullet() {
+        if (state.currentIndex > 0) {
+          state.currentIndex--;
+          renderCurrentBullet();
+          resetPaceProgress();
+        }
+      }
+
+      // Gerenciamento de Auto-Pace (Avanço automático a cada X segundos)
+      function toggleAutoPace(forceState = null) {
+        state.autoPaceActive = forceState !== null ? forceState : !state.autoPaceActive;
+
+        if (state.autoPaceActive) {
+          dom.autoPaceBtn.classList.add("active");
+          dom.paceIcon.className = "fas fa-pause";
+          startPaceTimer();
+        } else {
+          dom.autoPaceBtn.classList.remove("active");
+          dom.paceIcon.className = "fas fa-play";
+          stopPaceTimer();
+        }
+      }
+
+      function startPaceTimer() {
+        stopPaceTimer();
+        resetPaceProgress();
+
+        const stepMs = 50;
+        const totalMs = state.paceSeconds * 1000;
+        let elapsed = 0;
+
+        state.paceInterval = setInterval(() => {
+          elapsed += stepMs;
+          const pct = Math.min(100, (elapsed / totalMs) * 100);
+          dom.paceProgressBar.style.width = `${pct}%`;
+
+          if (elapsed >= totalMs) {
+            elapsed = 0;
+            dom.paceProgressBar.style.width = "0%";
+            nextBullet();
+          }
+        }, stepMs);
+      }
+
+      function stopPaceTimer() {
+        if (state.paceInterval) {
+          clearInterval(state.paceInterval);
+          state.paceInterval = null;
+        }
+        dom.paceProgressBar.style.width = "0%";
+      }
+
+      function resetPaceProgress() {
+        if (state.autoPaceActive) {
+          startPaceTimer();
+        } else {
+          dom.paceProgressBar.style.width = "0%";
+        }
+      }
+
+      // Ciclo de velocidades de Auto-Pace (3s -> 5s -> 8s)
+      function cyclePaceSeconds() {
+        const speeds = [3, 5, 8];
+        const nextIdx = (speeds.indexOf(state.paceSeconds) + 1) % speeds.length;
+        state.paceSeconds = speeds[nextIdx];
+        dom.paceLabel.textContent = `${state.paceSeconds}s`;
+        if (state.autoPaceActive) {
+          startPaceTimer();
+        }
+      }
+
+      // Ciclo de tamanhos de fonte
+      function cycleFontSize() {
+        state.fontSizeIndex = (state.fontSizeIndex + 1) % state.fontSizes.length;
+        const labels = ["A-", "A", "A+"];
+        dom.fontSizeLabel.textContent = labels[state.fontSizeIndex];
+        renderCurrentBullet();
+      }
+
+      // Alterna modo compacto vs expandido
+      function toggleExpandedMode() {
+        state.isExpanded = !state.isExpanded;
+        dom.container.classList.toggle("expanded-mode", state.isExpanded);
+        dom.modeToggleBtn.classList.toggle("active", state.isExpanded);
+        renderCurrentBullet();
+      }
+
+      // Injeta novos tópicos no teleprompter
+      function setTeleprompterData(data) {
+        if (!data) return;
+
+        if (data.question) {
+          state.question = data.question;
+          dom.questionBadge.textContent = data.question;
+          dom.questionBadge.title = data.question;
+        }
+
+        const rawPoints = data.points || data.content || data.response;
+        if (rawPoints) {
+          state.bullets = formatIntoBiteSizedBullets(rawPoints);
+          state.currentIndex = 0;
+          renderCurrentBullet();
+          // Pisca o indicador em verde para avisar que há resposta pronta
+          dom.statusPulse.style.backgroundColor = "#38bdf8";
+          setTimeout(() => {
+            dom.statusPulse.style.backgroundColor = "#10b981";
+          }, 1200);
+
+          if (state.autoPaceActive) {
+            startPaceTimer();
+          }
+        }
+      }
+
+      // Listeners de Teclado para Agilidade Máxima (Zero olhar desviado)
+      window.addEventListener("keydown", (e) => {
+        if (e.key === "ArrowRight" || e.key === " ") {
+          e.preventDefault();
+          nextBullet();
+        } else if (e.key === "ArrowLeft") {
+          e.preventDefault();
+          prevBullet();
+        } else if (e.key.toLowerCase() === "p") {
+          e.preventDefault();
+          toggleAutoPace();
+        } else if (e.key.toLowerCase() === "n") {
+          e.preventDefault();
+          if (window.electronAPI && window.electronAPI.snapTeleprompterToCamera) {
+            window.electronAPI.snapTeleprompterToCamera();
+          }
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          if (window.electronAPI && window.electronAPI.hideTeleprompter) {
+            window.electronAPI.hideTeleprompter();
+          }
+        }
+      });
+
+      // Listeners dos Botões do Header
+      dom.nextBtn.addEventListener("click", nextBullet);
+      dom.prevBtn.addEventListener("click", prevBullet);
+      dom.bulletDisplayArea.addEventListener("click", (e) => {
+        if (!state.isExpanded) nextBullet();
+      });
+
+      dom.autoPaceBtn.addEventListener("click", (e) => {
+        if (e.shiftKey) {
+          cyclePaceSeconds();
+        } else {
+          toggleAutoPace();
+        }
+      });
+      dom.autoPaceBtn.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        cyclePaceSeconds();
+      });
+
+      dom.fontSizeBtn.addEventListener("click", cycleFontSize);
+      dom.modeToggleBtn.addEventListener("click", toggleExpandedMode);
+
+      dom.snapToNotchBtn.addEventListener("click", async () => {
+        if (window.electronAPI && window.electronAPI.snapTeleprompterToCamera) {
+          await window.electronAPI.snapTeleprompterToCamera();
+        }
+      });
+
+      dom.closePrompterBtn.addEventListener("click", async () => {
+        if (window.electronAPI && window.electronAPI.hideTeleprompter) {
+          await window.electronAPI.hideTeleprompter();
+        }
+      });
+
+      // Integração IPC com o ecossistema OpenCluely
+      if (window.electronAPI) {
+        // Recebe Smart Talking Points preditivos do canal Whisper/Gemini
+        if (window.electronAPI.onSmartTalkingPoints) {
+          window.electronAPI.onSmartTalkingPoints((event, data) => {
+            setTeleprompterData(data);
+          });
+        }
+
+        // Recebe atualizações diretas de dados do Teleprompter
+        if (window.electronAPI.onTeleprompterData) {
+          window.electronAPI.onTeleprompterData((event, data) => {
+            setTeleprompterData(data);
+          });
+        }
+
+        // Recebe respostas completas do LLM
+        if (window.electronAPI.onTranscriptionLlmResponse) {
+          window.electronAPI.onTranscriptionLlmResponse((event, data) => {
+            if (data && data.response && (!state.bullets || state.bullets.length === 0)) {
+              setTeleprompterData({ response: data.response });
+            }
+          });
+        }
+      }
+
+      // Inicialização
+      renderCurrentBullet();
+    </script>
+  </body>
+</html>

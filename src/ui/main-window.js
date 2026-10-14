@@ -335,6 +335,7 @@ class MainWindowUI {
         this.audioSourceOptions = document.getElementById('audioSourceOptions');
         this.openSettingsFromAudioMenu = document.getElementById('openSettingsFromAudioMenu');
         this.chatButton = document.getElementById('chatButton');
+        this.teleprompterButton = document.getElementById('teleprompterButton');
         this.newSessionButton = document.getElementById('newSessionButton');
         this.resizeHandle = document.getElementById('resizeHandle');
 
@@ -351,6 +352,16 @@ class MainWindowUI {
                 e.stopPropagation();
                 if (window.electronAPI && window.electronAPI.switchToChat) {
                     await window.electronAPI.switchToChat();
+                }
+            });
+        }
+
+        // Teleprompter (Notch) Button click handler
+        if (this.teleprompterButton) {
+            this.teleprompterButton.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if (window.electronAPI && window.electronAPI.toggleTeleprompter) {
+                    await window.electronAPI.toggleTeleprompter();
                 }
             });
         }
