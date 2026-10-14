@@ -16,6 +16,7 @@
     "build:all": "electron-builder --mac --win --linux",
     "dist": "npm run build",
     "pack": "electron-builder --dir",
+    "install-app": "npm run pack && cp -R dist/mac-arm64/OpenCluely.app /Applications/OpenCluely.app && ln -sf /Applications/OpenCluely.app ~/Desktop/OpenCluely.app",
     "clean": "rm -rf dist/",
     "rebuild": "npm run clean && npm run build",
     "release": "npm run clean && npm run build:all",
