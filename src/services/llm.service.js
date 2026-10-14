@@ -764,7 +764,7 @@ class LLMService {
     this.applySkillGenerationDefaults(request, activeSkill, true);
 
     // Add intelligent filtering system instruction
-    const intelligentPrompt = this.getIntelligentTranscriptionPrompt(activeSkill, programmingLanguage);
+    const intelligentPrompt = this.getIntelligentTranscriptionPrompt(activeSkill, programmingLanguage, cleanText);
     if (!intelligentPrompt) {
       throw new Error('Failed to generate intelligent transcription prompt');
     }
@@ -796,7 +796,7 @@ class LLMService {
     this.applySkillGenerationDefaults(request, activeSkill, true);
 
   // For chat/transcription messages, DO NOT include the full skill prompt; use only the intelligent filter prompt
-  const intelligentPrompt = this.getIntelligentTranscriptionPrompt(activeSkill, programmingLanguage);
+  const intelligentPrompt = this.getIntelligentTranscriptionPrompt(activeSkill, programmingLanguage, text);
   request.systemInstruction = { parts: [{ text: intelligentPrompt }] };
 
     // Add recent conversation history (excluding system messages) with validation
@@ -854,7 +854,7 @@ class LLMService {
     return request;
   }
 
-  getIntelligentTranscriptionPrompt(activeSkill, programmingLanguage) {
+  getIntelligentTranscriptionPrompt(activeSkill, programmingLanguage, text = '') {
     if (activeSkill === 'interview') {
       return `# Live Interview Answer System
 
